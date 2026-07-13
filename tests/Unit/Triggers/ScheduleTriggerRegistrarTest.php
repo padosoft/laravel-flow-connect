@@ -113,6 +113,38 @@ final class ScheduleTriggerRegistrarTest extends TestCase
         Log::shouldHaveReceived('warning')->times(3);
     }
 
+    public function test_a_non_array_input_is_skipped_and_logged(): void
+    {
+        Log::spy();
+
+        $schedule = new Schedule;
+        $this->app->make(ScheduleTriggerRegistrar::class)
+            ->register($schedule, [
+                ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'input' => 'not-an-array'],
+            ]);
+
+        $this->assertCount(0, $schedule->events());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
+    public function test_a_non_string_timezone_is_skipped_and_logged(): void
+    {
+        Log::spy();
+
+        $schedule = new Schedule;
+        $this->app->make(ScheduleTriggerRegistrar::class)
+            ->register($schedule, [
+                ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'timezone' => 42],
+            ]);
+
+        $this->assertCount(0, $schedule->events());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
     public function test_an_invalid_timezone_identifier_is_skipped_and_logged(): void
     {
         Log::spy();

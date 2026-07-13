@@ -31,7 +31,7 @@ final class ScheduleTriggerRegistrar
     ) {}
 
     /**
-     * @param  array<int, mixed>  $entries  config-sourced, so each entry's shape is only an ASSUMPTION until validated below — a non-array entry is skipped, not trusted
+     * @param  array<array-key, mixed>  $entries  config-sourced (a raw array cast may yield string keys too), so each entry's shape is only an ASSUMPTION until validated below — a non-array entry is skipped, not trusted
      */
     public function register(Schedule $schedule, array $entries): void
     {

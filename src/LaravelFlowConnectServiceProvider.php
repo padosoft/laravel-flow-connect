@@ -51,7 +51,7 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         // artisan command run alongside this package never pays that cost.
         $this->app->afterResolving(Schedule::class, function (Schedule $schedule): void {
             $config = $this->app->make(ConfigRepository::class);
-            /** @var array<int, mixed> $entries */
+            /** @var array<array-key, mixed> $entries */
             $entries = (array) $config->get('laravel-flow-connect.schedule_triggers', []);
 
             $this->app->make(ScheduleTriggerRegistrar::class)->register($schedule, $entries);
