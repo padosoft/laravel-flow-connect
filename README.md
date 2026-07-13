@@ -17,6 +17,26 @@
 - **Utility nodes** — transform, condition, delay/timer, batch.
 - **Triggers** — start flows from cron schedules, Laravel events, and signed inbound webhooks (HMAC, timestamp window), mirroring laravel-flow's signed outbox scheme.
 
+## Schedule trigger
+
+Start a flow run on a cron schedule via `config/laravel-flow-connect.php`:
+
+```php
+return [
+    'schedule_triggers' => [
+        ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'input' => ['range' => 'yesterday']],
+    ],
+];
+```
+
+Publish the config to customize it in a host application:
+
+```bash
+php artisan vendor:publish --tag=laravel-flow-connect-config
+```
+
+Each entry registers on Laravel's own scheduler (`php artisan schedule:run`, same as any other scheduled task) and fires `ScheduleTrigger`, which hands the entry's static `input` straight to `Flow::dispatch($flow, $input)` — no runtime input mapping beyond what's declared in config (unlike `EventTrigger`, a cron tick carries no data of its own to map from). An entry with a malformed `flow`/`cron` value is skipped (not registered) and logged as a warning at boot, rather than failing the whole application boot or the rest of the schedule; a `fire()` failure at run time (e.g. the target flow's own input validation rejects the configured input) is caught and logged the same way, never aborting the scheduler's run of the other registered events.
+
 ## Requirements
 
 - PHP `^8.3`

@@ -4,7 +4,12 @@ declare(strict_types=1);
 
 namespace Padosoft\LaravelFlowConnect;
 
+use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
+use Illuminate\Contracts\Container\Container;
 use Illuminate\Support\ServiceProvider;
+use Padosoft\LaravelFlowConnect\Triggers\ScheduleTrigger;
+use Padosoft\LaravelFlowConnect\Triggers\ScheduleTriggerRegistrar;
 
 /**
  * @internal
@@ -13,6 +18,31 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        // Scaffold: bindings arrive with the Laravel Flow 2.0 program (Macro D).
+        $this->mergeConfigFrom(
+            __DIR__.'/../config/laravel-flow-connect.php',
+            'laravel-flow-connect',
+        );
+
+        $this->app->singleton(ScheduleTrigger::class);
+        $this->app->singleton(ScheduleTriggerRegistrar::class, fn (Container $app): ScheduleTriggerRegistrar => new ScheduleTriggerRegistrar($app->make(ScheduleTrigger::class)));
+    }
+
+    public function boot(): void
+    {
+        $this->publishes([
+            __DIR__.'/../config/laravel-flow-connect.php' => $this->app->configPath('laravel-flow-connect.php'),
+        ], 'laravel-flow-connect-config');
+
+        // Schedule::class is a container singleton lazily built by
+        // ConsoleKernel::resolveConsoleSchedule() (see Laravel's
+        // FoundationServiceProvider) — safe to resolve directly here rather
+        // than deferring, since resolving it is exactly what triggers that
+        // lazy construction.
+        $schedule = $this->app->make(Schedule::class);
+        $config = $this->app->make(ConfigRepository::class);
+        /** @var array<int, array{flow?: mixed, cron?: mixed, input?: mixed, timezone?: mixed}> $entries */
+        $entries = (array) $config->get('laravel-flow-connect.schedule_triggers', []);
+
+        $this->app->make(ScheduleTriggerRegistrar::class)->register($schedule, $entries);
     }
 }
