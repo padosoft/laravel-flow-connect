@@ -87,6 +87,47 @@ final class ScheduleTriggerRegistrarTest extends TestCase
         Log::shouldHaveReceived('warning')->once();
     }
 
+    public function test_a_non_array_entry_is_skipped_not_a_fatal(): void
+    {
+        Log::spy();
+
+        $schedule = new Schedule;
+        $this->app->make(ScheduleTriggerRegistrar::class)
+            ->register($schedule, ['not-an-array', 42, null]);
+
+        $this->assertCount(0, $schedule->events());
+        Log::shouldHaveReceived('warning')->times(3);
+    }
+
+    public function test_an_invalid_timezone_identifier_is_skipped_and_logged(): void
+    {
+        Log::spy();
+
+        $schedule = new Schedule;
+        $this->app->make(ScheduleTriggerRegistrar::class)
+            ->register($schedule, [
+                ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'timezone' => 'Not/ARealZone'],
+            ]);
+
+        $this->assertCount(0, $schedule->events());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
+    public function test_a_valid_timezone_identifier_is_applied(): void
+    {
+        $schedule = new Schedule;
+        $this->app->make(ScheduleTriggerRegistrar::class)
+            ->register($schedule, [
+                ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'timezone' => 'Europe/Rome'],
+            ]);
+
+        $events = $schedule->events();
+        $this->assertCount(1, $events);
+        $this->assertSame('Europe/Rome', (string) $events[0]->timezone);
+    }
+
     public function test_a_fire_failure_is_caught_and_logged_not_thrown(): void
     {
         Log::spy();

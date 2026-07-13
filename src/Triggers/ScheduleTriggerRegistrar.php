@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace Padosoft\LaravelFlowConnect\Triggers;
 
 use Cron\CronExpression;
+use DateInvalidTimeZoneException;
+use DateTimeZone;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Support\Facades\Log;
 use Throwable;
@@ -29,11 +31,17 @@ final class ScheduleTriggerRegistrar
     ) {}
 
     /**
-     * @param  array<int, array{flow?: mixed, cron?: mixed, input?: mixed, timezone?: mixed}>  $entries
+     * @param  array<int, mixed>  $entries  config-sourced, so each entry's shape is only an ASSUMPTION until validated below — a non-array entry is skipped, not trusted
      */
     public function register(Schedule $schedule, array $entries): void
     {
         foreach ($entries as $index => $entry) {
+            if (! is_array($entry)) {
+                $this->skip($index, 'the config entry itself must be an array');
+
+                continue;
+            }
+
             $flow = $entry['flow'] ?? null;
             $cron = $entry['cron'] ?? null;
             $input = $entry['input'] ?? [];
@@ -61,6 +69,20 @@ final class ScheduleTriggerRegistrar
                 $this->skip($index, 'the "timezone" key must be a string or null');
 
                 continue;
+            }
+
+            // is_string() alone doesn't prove it's a REAL IANA identifier — an
+            // invalid one would otherwise only surface later, when the
+            // scheduler actually evaluates due-ness, breaking schedule:run
+            // instead of being caught here at registration.
+            if ($timezone !== null) {
+                try {
+                    new DateTimeZone($timezone);
+                } catch (DateInvalidTimeZoneException) {
+                    $this->skip($index, sprintf('the "timezone" value [%s] is not a valid timezone identifier', $timezone));
+
+                    continue;
+                }
             }
 
             $event = $schedule->call(function () use ($flow, $input, $index): void {

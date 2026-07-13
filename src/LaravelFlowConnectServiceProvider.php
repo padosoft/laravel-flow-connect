@@ -29,6 +29,15 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // Publishing and schedule registration only matter for console/CLI
+        // execution (artisan vendor:publish, schedule:run, schedule:list) —
+        // guard both so an ordinary HTTP request's boot doesn't pay for
+        // resolving Schedule::class (which lazily builds the whole
+        // ConsoleKernel) or registering callbacks nothing will ever run.
+        if (! $this->app->runningInConsole()) {
+            return;
+        }
+
         $this->publishes([
             __DIR__.'/../config/laravel-flow-connect.php' => $this->app->configPath('laravel-flow-connect.php'),
         ], 'laravel-flow-connect-config');
@@ -40,7 +49,7 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         // lazy construction.
         $schedule = $this->app->make(Schedule::class);
         $config = $this->app->make(ConfigRepository::class);
-        /** @var array<int, array{flow?: mixed, cron?: mixed, input?: mixed, timezone?: mixed}> $entries */
+        /** @var array<int, mixed> $entries */
         $entries = (array) $config->get('laravel-flow-connect.schedule_triggers', []);
 
         $this->app->make(ScheduleTriggerRegistrar::class)->register($schedule, $entries);
