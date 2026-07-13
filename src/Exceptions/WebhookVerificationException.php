@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace Padosoft\LaravelFlowConnect\Exceptions;
 
 use Padosoft\LaravelFlowConnect\Contracts\WebhookInputMapper;
+use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
 use RuntimeException;
 
@@ -13,8 +14,8 @@ use RuntimeException;
  * for any REQUEST-LEVEL rejection (bad/missing/expired signature, replayed
  * request, malformed JSON body) — as opposed to a payload-MAPPING failure
  * (an {@see WebhookInputMapper}
- * throwing), which is a distinct failure class handled separately by the
- * registrar.
+ * throwing), which is a distinct failure class handled separately by
+ * {@see WebhookRequestController}.
  *
  * `$statusCode` is the HTTP status the route handler must respond with.
  * `getMessage()` is deliberately a GENERIC, safe-to-return-externally reason

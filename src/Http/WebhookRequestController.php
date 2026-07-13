@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace Padosoft\LaravelFlowConnect\Http;
 
+use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -12,15 +13,20 @@ use Illuminate\Support\Facades\Log;
 use Padosoft\LaravelFlowConnect\Contracts\WebhookInputMapper;
 use Padosoft\LaravelFlowConnect\Exceptions\WebhookVerificationException;
 use Padosoft\LaravelFlowConnect\Triggers\WebhookTrigger;
+use Padosoft\LaravelFlowConnect\Triggers\WebhookTriggerConfig;
 use Padosoft\LaravelFlowConnect\Triggers\WebhookTriggerRegistrar;
 use Throwable;
 
 /**
  * Handles every registered inbound webhook route. A CLASS (not a closure) —
- * {@see WebhookTriggerRegistrar} binds
- * the per-slug flow/secret/mapper/window as route DEFAULTS rather than
- * closure captures, so the routes it registers remain `route:cache`-able
- * (Laravel cannot serialize a closure into the route cache).
+ * {@see WebhookTriggerRegistrar} binds only the (non-sensitive) `slug` as a
+ * route default, so the routes it registers remain `route:cache`-able
+ * without ever writing a secret into that build artifact. `flow`/`secret`/
+ * `mapper` are re-resolved HERE, fresh from config, via the SAME validation
+ * {@see WebhookTriggerConfig::validateEntry()} the registrar ran at boot —
+ * config does not change within a single request lifecycle, so this only
+ * fails defensively (e.g. a route survived a stale `route:cache` after the
+ * config changed).
  *
  * Wraps its ENTIRE body in a single top-level try/catch: a request arrives
  * from an UNTRUSTED external caller inside a call stack this package does
@@ -42,22 +48,27 @@ final class WebhookRequestController
     public function __construct(
         private readonly WebhookTrigger $trigger,
         private readonly WebhookRequestVerifier $verifier,
+        private readonly ConfigRepository $config,
         private readonly Container $container,
     ) {}
 
     public function __invoke(Request $request): JsonResponse
     {
-        $route = $request->route();
-        $slug = $this->stringParameter($route, 'slug');
-        $flow = $this->stringParameter($route, 'flow');
-        $secret = $this->stringParameter($route, 'secret');
-        $mapperClassValue = $route->parameter('mapperClass');
-        /** @var class-string<WebhookInputMapper>|null $mapperClass */
-        $mapperClass = is_string($mapperClassValue) ? $mapperClassValue : null;
-        $replayWindowSecondsValue = $route->parameter('replayWindowSeconds');
-        $replayWindowSeconds = is_string($replayWindowSecondsValue) && ctype_digit($replayWindowSecondsValue)
-            ? (int) $replayWindowSecondsValue
-            : 0;
+        $slug = $this->stringParameter($request->route(), 'slug');
+        $entry = $this->resolveEntry($slug);
+
+        if ($entry === null) {
+            // Defensive only (see class docblock): a route only ever exists
+            // for a slug the registrar already validated at boot.
+            Log::warning('laravel-flow-connect: webhook route matched a slug with no valid current config entry.', ['slug' => $slug]);
+
+            return response()->json(['error' => 'not found'], 404);
+        }
+
+        ['flow' => $flow, 'secret' => $secret, 'mapperClass' => $mapperClass] = $entry;
+        $replayWindowSeconds = WebhookTriggerConfig::replayWindowSeconds(
+            $this->config->get('laravel-flow-connect.webhook.replay_window_seconds'),
+        );
 
         try {
             // header() can return array|string|null if the client sent the
@@ -101,6 +112,26 @@ final class WebhookRequestController
 
             return response()->json(['error' => 'internal error'], 500);
         }
+    }
+
+    /**
+     * @return array{flow: string, secret: string, mapperClass: class-string<WebhookInputMapper>|null}|null
+     */
+    private function resolveEntry(string $slug): ?array
+    {
+        if ($slug === '') {
+            return null;
+        }
+
+        /** @var array<array-key, mixed> $triggers */
+        $triggers = (array) $this->config->get('laravel-flow-connect.webhook.triggers', []);
+        $entry = $triggers[$slug] ?? null;
+
+        if (! is_array($entry)) {
+            return null;
+        }
+
+        return WebhookTriggerConfig::validateEntry($slug, $entry);
     }
 
     private function stringParameter(Route $route, string $name): string

@@ -69,10 +69,19 @@ final class WebhookTriggerRegistrarTest extends TestCase
      * pattern the skip/log tests below already use — sidesteps that
      * boot-order issue entirely.
      *
+     * Also syncs `$this->app['config']`: {@see WebhookRequestController}
+     * deliberately re-resolves `flow`/`secret`/`mapper` FRESH from the
+     * config repository at request time (only `slug` travels as a route
+     * default, to keep secrets out of `route:cache`), so it must see the
+     * SAME config this test is exercising, not just what was passed to
+     * `register()`.
+     *
      * @param  array<string, mixed>  $webhookConfig
      */
     private function dispatchOnFreshRouter(string $body, ?string $signatureHeader, array $webhookConfig, string $uri = self::URI): Response
     {
+        $this->app['config']->set('laravel-flow-connect.webhook', $webhookConfig);
+
         $registrar = $this->app->make(WebhookTriggerRegistrar::class);
         $router = new Router($this->app['events'], $this->app);
         $registrar->register($router, $webhookConfig);
@@ -160,6 +169,58 @@ final class WebhookTriggerRegistrarTest extends TestCase
 
         $this->assertFalse($route->getAction('uses') instanceof \Closure);
         $this->assertSame(WebhookRequestController::class, $route->getController()::class);
+    }
+
+    public function test_the_secret_never_appears_in_the_registered_routes_defaults(): void
+    {
+        // A route default is written verbatim into a host application's
+        // route:cache build artifact — only the (non-sensitive) slug may
+        // travel that way; flow/secret/mapper must be re-resolved from
+        // config at request time instead.
+        $registrar = $this->app->make(WebhookTriggerRegistrar::class);
+        $router = new Router($this->app['events'], $this->app);
+        $registrar->register($router, [
+            'enabled' => true,
+            'triggers' => ['order-webhook' => ['flow' => 'fulfill-order', 'secret' => self::SECRET]],
+        ]);
+
+        $route = $router->getRoutes()->getRoutes()[0];
+
+        $this->assertSame(['slug' => 'order-webhook'], $route->defaults);
+    }
+
+    public function test_a_slug_containing_a_slash_is_skipped_and_logged(): void
+    {
+        Log::spy();
+
+        $registrar = $this->app->make(WebhookTriggerRegistrar::class);
+        $router = new Router($this->app['events'], $this->app);
+        $registrar->register($router, ['enabled' => true, 'triggers' => [
+            'order/1' => ['flow' => 'x', 'secret' => 'y'],
+        ]]);
+
+        // A malformed slug interpolated raw into the URI would otherwise
+        // split into an unintended extra path segment.
+        $this->assertCount(0, $router->getRoutes());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
+    public function test_a_slug_containing_route_placeholder_syntax_is_skipped_and_logged(): void
+    {
+        Log::spy();
+
+        $registrar = $this->app->make(WebhookTriggerRegistrar::class);
+        $router = new Router($this->app['events'], $this->app);
+        $registrar->register($router, ['enabled' => true, 'triggers' => [
+            '{evil}' => ['flow' => 'x', 'secret' => 'y'],
+        ]]);
+
+        $this->assertCount(0, $router->getRoutes());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
     }
 
     public function test_tampered_signature_is_rejected_401(): void

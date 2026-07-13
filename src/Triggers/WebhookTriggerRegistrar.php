@@ -8,7 +8,6 @@ use Illuminate\Routing\Router;
 use Illuminate\Support\Facades\Log;
 use Padosoft\LaravelFlowConnect\Contracts\WebhookInputMapper;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
-use ReflectionClass;
 
 /**
  * Reads `config('laravel-flow-connect.webhook')` and registers one POST
@@ -26,21 +25,19 @@ use ReflectionClass;
  * exist for `route:list`, route caching, AND actual HTTP handling alike).
  *
  * The route action is {@see WebhookRequestController} (a CLASS, not a
- * closure): Laravel's `route:cache` cannot serialize a closure action, so a
- * host application caching its routes would otherwise lose every webhook
- * route silently. Each entry's `flow`/`secret`/`mapper`/replay-window is
- * threaded through as route DEFAULTS (`Route::defaults()`) rather than
- * closure captures — defaults ARE cache-serializable, and the controller
- * reads them back via `$request->route()->parameter(...)`.
+ * closure): Laravel's `route:cache` cannot safely serialize a closure
+ * action. Only the (non-sensitive) `slug` is threaded through as a route
+ * DEFAULT (`Route::defaults()`) — `flow`/`secret`/`mapper` are DELIBERATELY
+ * NOT: a route default is written verbatim into the host application's
+ * `route:cache` build artifact, an unintended place to persist a
+ * credential. The controller re-resolves those fresh from config via
+ * {@see WebhookTriggerConfig::validateEntry()} — the SAME validation this
+ * class runs at boot — at request time, using only the slug.
  *
  * @internal
  */
 final class WebhookTriggerRegistrar
 {
-    private const DEFAULT_ROUTE_PREFIX = 'laravel-flow-connect/webhook';
-
-    private const DEFAULT_REPLAY_WINDOW_SECONDS = 300;
-
     /**
      * @param  array<string, mixed>  $config  the raw `laravel-flow-connect.webhook` config array
      */
@@ -50,15 +47,14 @@ final class WebhookTriggerRegistrar
             return;
         }
 
-        $prefix = $this->stringOrDefault($config['route_prefix'] ?? null, self::DEFAULT_ROUTE_PREFIX);
-        $replayWindowSeconds = $this->positiveIntOrDefault($config['replay_window_seconds'] ?? null, self::DEFAULT_REPLAY_WINDOW_SECONDS);
+        $prefix = WebhookTriggerConfig::routePrefix($config['route_prefix'] ?? null);
 
         /** @var array<array-key, mixed> $triggers */
         $triggers = is_array($config['triggers'] ?? null) ? $config['triggers'] : [];
 
         foreach ($triggers as $slug => $entry) {
-            if (! is_string($slug) || trim($slug) === '') {
-                $this->skip($slug, 'the "triggers" array key must be a non-empty string route slug');
+            if (! WebhookTriggerConfig::isValidSlug($slug)) {
+                $this->skip($slug, 'the "triggers" array key must be a non-empty string matching [A-Za-z0-9_-]+ (it becomes a literal route path segment)');
 
                 continue;
             }
@@ -69,93 +65,18 @@ final class WebhookTriggerRegistrar
                 continue;
             }
 
-            $flow = $entry['flow'] ?? null;
-            $secret = $entry['secret'] ?? null;
-            $mapperClass = $entry['mapper'] ?? null;
-
-            if (! is_string($flow) || trim($flow) === '') {
-                $this->skip($slug, 'the "flow" key must be a non-empty string');
-
-                continue;
-            }
-
-            if (! is_string($secret) || $secret === '') {
-                $this->skip($slug, 'the "secret" key must be a non-empty string');
-
-                continue;
-            }
-
-            if ($mapperClass !== null && ! $this->isInstantiableMapper($mapperClass)) {
-                $this->skip($slug, sprintf('the "mapper" value must be an instantiable class implementing %s', WebhookInputMapper::class));
+            if (WebhookTriggerConfig::validateEntry($slug, $entry) === null) {
+                $this->skip($slug, sprintf(
+                    'the entry must declare a non-empty "flow" and "secret", and an optional "mapper" that is an instantiable class implementing %s',
+                    WebhookInputMapper::class,
+                ));
 
                 continue;
             }
 
             $router->post(sprintf('%s/%s', $prefix, $slug), WebhookRequestController::class)
-                ->defaults('slug', $slug)
-                ->defaults('flow', $flow)
-                ->defaults('secret', $secret)
-                ->defaults('mapperClass', $mapperClass)
-                // Stored as a STRING: Route::parameter()'s declared return
-                // type is object|string|null (matching how URI-matched
-                // segments always arrive as strings) — an int default would
-                // work at runtime but fights that contract. The controller
-                // parses it back.
-                ->defaults('replayWindowSeconds', (string) $replayWindowSeconds);
+                ->defaults('slug', $slug);
         }
-    }
-
-    /**
-     * Same over-permissive-`is_a()` pitfall as {@see EventTriggerRegistrar}:
-     * an interface/abstract class name "is a" the target type too, passing
-     * this check but failing at every actual instantiation attempt.
-     */
-    private function isInstantiableMapper(mixed $mapperClass): bool
-    {
-        if (! is_string($mapperClass) || trim($mapperClass) === '' || ! class_exists($mapperClass)) {
-            return false;
-        }
-
-        if (! is_a($mapperClass, WebhookInputMapper::class, true)) {
-            return false;
-        }
-
-        return (new ReflectionClass($mapperClass))->isInstantiable();
-    }
-
-    private function stringOrDefault(mixed $value, string $default): string
-    {
-        if (! is_string($value) || trim($value) === '') {
-            return $default;
-        }
-
-        // Re-check emptiness AFTER stripping slashes: a configured value of
-        // "/" or "///" passes the trim() !== '' check above but strips down
-        // to '', which would silently produce a route like "/{slug}" instead
-        // of falling back to the default prefix.
-        $trimmed = trim($value, '/');
-
-        return $trimmed !== '' ? $trimmed : $default;
-    }
-
-    private function positiveIntOrDefault(mixed $value, int $default): int
-    {
-        // Config values commonly arrive as numeric STRINGS (env() always
-        // returns a string for a set variable, regardless of the config
-        // file's declared default type) — accepting only is_int() silently
-        // discarded every real-world .env-configured value.
-        if (is_int($value)) {
-            return $value > 0 ? $value : $default;
-        }
-
-        // ctype_digit('') is false, so a non-empty check here is redundant.
-        if (is_string($value) && ctype_digit($value)) {
-            $int = (int) $value;
-
-            return $int > 0 ? $int : $default;
-        }
-
-        return $default;
     }
 
     private function skip(int|string $slug, string $reason): void
