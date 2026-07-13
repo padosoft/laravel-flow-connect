@@ -37,7 +37,7 @@ Ai/
 └── padosoft-laravel-flow/      (core — note: directory name differs from the package name)
 ```
 
-This is a development-time convenience only. Once `padosoft/laravel-flow` cuts its first v2 tag, the path repository entry and the `"*"` version constraint in `composer.json` will be replaced with a real version constraint (e.g. `^2.0`) against the tagged Packagist release. CI mirrors this layout by checking out both repositories as true siblings (see `.github/workflows/ci.yml`).
+This is a development-time convenience only. Once `padosoft/laravel-flow` cuts its first v2 tag, the path repository entry and the `dev-main` version constraint in `composer.json` will be replaced with a real version constraint (e.g. `^2.0`) against the tagged Packagist release. CI mirrors this layout by checking out both repositories as true siblings (see `.github/workflows/ci.yml`).
 
 ## License
 
