@@ -63,7 +63,7 @@ Ai/
 
 This is a development-time convenience. Three stages of retargeting are expected before this stabilizes:
 
-1. **Now → Macro D gate**: `composer.json` tracks core's `task/v2d-realtime-triggers` MACRO branch (`"padosoft/laravel-flow": "dev-task/v2d-realtime-triggers"`), not `main` — the trigger contract this package's D-PR3/D-PR4/D-PR5 implement against lives there until the Macro D gate merges it to core's `main`. CI mirrors this by checking out that exact ref (see `.github/workflows/ci.yml`).
+1. **Now → Macro D gate**: `composer.json` tracks core's `task/v2d-realtime-triggers` MACRO branch (`"padosoft/laravel-flow": "dev-task/v2d-realtime-triggers"`), not `main` — the trigger contract this package's D-PR3/D-PR4/D-PR5 implement against lives there until the Macro D gate merges it to core's `main`. CI mirrors this by checking out that exact ref (see `.github/workflows/ci.yml`). **Locally**, the path repository mirrors whatever branch the sibling `../padosoft-laravel-flow` checkout currently has checked out — `git -C ../padosoft-laravel-flow checkout task/v2d-realtime-triggers` (and `git pull`) before running `composer update` here, or the install will fail (or silently mirror the wrong ref) while the constraint targets that branch.
 2. **Macro D gate → core's first v2 tag**: retarget both `composer.json` and CI back to `main`/`dev-main`.
 3. **After core's first v2 tag**: the path repository entry and the `dev-main` constraint are replaced with a real version constraint (e.g. `^2.0`) against the tagged Packagist release.
 

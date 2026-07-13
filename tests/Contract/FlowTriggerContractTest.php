@@ -11,12 +11,15 @@ use ReflectionClass;
 
 /**
  * The FlowTrigger contract lives in CORE, `Padosoft\LaravelFlow\Contracts\FlowTrigger`,
- * so it is a stable, SemVer-covered surface any trigger source can depend
- * on — this package does NOT redefine it. This test only asserts the
- * interface is resolvable from core and that a concrete connect trigger
- * (D-PR3 ScheduleTrigger, D-PR4 EventTrigger, D-PR5 WebhookTrigger) can
- * implement it; the actual signature is pinned by core's own
- * `tests/Contract/PublicApiContractTest.php`, not duplicated here.
+ * marked `@api` there — the canonical interface any trigger source
+ * depends on, SemVer-covered once core cuts its first tagged release
+ * (core has no tag yet; this package currently tracks an untagged dev
+ * branch, see README). This package does NOT redefine the interface.
+ * This test only asserts it is resolvable from core and that a concrete
+ * connect trigger (D-PR3 ScheduleTrigger, D-PR4 EventTrigger, D-PR5
+ * WebhookTrigger) can implement it; the actual signature is pinned by
+ * core's own `tests/Contract/PublicApiContractTest.php`, not duplicated
+ * here.
  */
 final class FlowTriggerContractTest extends TestCase
 {
