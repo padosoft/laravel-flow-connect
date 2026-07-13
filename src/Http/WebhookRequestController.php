@@ -134,9 +134,19 @@ final class WebhookRequestController
         return WebhookTriggerConfig::validateEntry($slug, $entry);
     }
 
-    private function stringParameter(Route $route, string $name): string
+    /**
+     * `Request::route()` can return null (no route resolver set yet — not
+     * expected to ever be true when this controller runs, since Laravel
+     * only invokes it AFTER routing succeeds, but a strictly-typed `Route`
+     * parameter would let a TypeError escape BEFORE the try/catch below if
+     * that assumption is ever wrong, undermining the "never leak an
+     * uncaught exception to an untrusted caller" guarantee this class
+     * exists for — same class of bug as the string-name-plus-payload event
+     * dispatch case in EventTriggerRegistrar).
+     */
+    private function stringParameter(?Route $route, string $name): string
     {
-        $value = $route->parameter($name);
+        $value = $route?->parameter($name);
 
         return is_string($value) ? $value : '';
     }
