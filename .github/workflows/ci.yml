@@ -34,11 +34,18 @@ jobs:
       # relative to this package's root) — mirror that layout here by
       # checking core out as a TRUE sibling directory, one level up from
       # laravel-flow-connect, matching what a local dev checkout looks like.
+      #
+      # ref is core's Macro D macro branch (task/v2d-realtime-triggers), NOT
+      # main — the trigger contract this package's Contract tests depend on
+      # (Padosoft\LaravelFlow\Contracts\FlowTrigger) lands there before it
+      # merges to core's main at the Macro D gate. composer.json's own
+      # "dev-task/v2d-realtime-triggers" constraint matches this ref exactly.
+      # Revert both to "main"/"dev-main" once that macro branch merges.
       - name: Checkout padosoft/laravel-flow (path-repo sibling)
         uses: actions/checkout@v4
         with:
           repository: padosoft/laravel-flow
-          ref: main
+          ref: task/v2d-realtime-triggers
           path: padosoft-laravel-flow
 
       - name: Setup PHP ${{ matrix.php }}
