@@ -5,14 +5,20 @@ declare(strict_types=1);
 namespace Padosoft\LaravelFlowConnect;
 
 use Illuminate\Console\Scheduling\Schedule;
+use Illuminate\Contracts\Cache\Repository as CacheRepository;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
+use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
+use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
 use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTriggerRegistrar;
+use Padosoft\LaravelFlowConnect\Triggers\WebhookTrigger;
+use Padosoft\LaravelFlowConnect\Triggers\WebhookTriggerRegistrar;
 
 /**
  * @internal
@@ -31,6 +37,11 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 
         $this->app->singleton(EventTrigger::class);
         $this->app->singleton(EventTriggerRegistrar::class, fn (Container $app): EventTriggerRegistrar => new EventTriggerRegistrar($app->make(EventTrigger::class), $app));
+
+        $this->app->singleton(WebhookTrigger::class);
+        $this->app->singleton(WebhookRequestVerifier::class, fn (Container $app): WebhookRequestVerifier => new WebhookRequestVerifier($app->make(CacheRepository::class)));
+        $this->app->singleton(WebhookRequestController::class);
+        $this->app->singleton(WebhookTriggerRegistrar::class);
     }
 
     public function boot(): void
@@ -44,6 +55,15 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         /** @var array<array-key, mixed> $entries */
         $entries = (array) $this->app->make(ConfigRepository::class)->get('laravel-flow-connect.event_triggers', []);
         $this->app->make(EventTriggerRegistrar::class)->register($this->app->make(Dispatcher::class), $entries);
+
+        // Webhook route registration, same reasoning as event triggers above:
+        // Router::post() only stores a route definition, forcing no eager
+        // resolution — so this runs unconditionally too (routes must exist
+        // for route:list/route caching AND actual HTTP handling alike, not
+        // only when this specific process happens to serve the request).
+        /** @var array<string, mixed> $webhookConfig */
+        $webhookConfig = (array) $this->app->make(ConfigRepository::class)->get('laravel-flow-connect.webhook', []);
+        $this->app->make(WebhookTriggerRegistrar::class)->register($this->app->make(Router::class), $webhookConfig);
 
         // Publishing and schedule registration only matter for console/CLI
         // execution.

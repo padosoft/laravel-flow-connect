@@ -62,4 +62,48 @@ return [
 
     'event_triggers' => [],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Inbound webhook triggers
+    |--------------------------------------------------------------------------
+    |
+    | Opt-in (disabled by default): when `enabled` is true, one POST route is
+    | registered per entry in `triggers`, at `{route_prefix}/{array key}`.
+    | Each request must carry an
+    | `X-Laravel-Flow-Signature: t={unix timestamp},v1={hex hmac-sha256}`
+    | header — the SAME scheme core's own outbound webhook delivery uses
+    | (`Padosoft\LaravelFlow\WebhookDeliveryClient`) — computed over
+    | "{timestamp}.{raw body}" keyed by the entry's `secret`. A request whose
+    | signature is missing/invalid, whose timestamp falls outside
+    | `replay_window_seconds`, or whose signature has already been consumed
+    | within that window (replay) is rejected with 401 and never reaches the
+    | target flow. `flow` is the target flow's registered name; `mapper` an
+    | OPTIONAL fully-qualified class-string implementing
+    | \Padosoft\LaravelFlowConnect\Contracts\WebhookInputMapper — omitting it
+    | fires the flow with the decoded JSON payload verbatim as input.
+    |
+    | An entry with a malformed key/`flow`/`secret`/`mapper` is SKIPPED (not
+    | routed) and logged as a warning at boot. A mapper that THROWS at
+    | request time, or a `fire()` failure, is logged with full detail (to
+    | this application's own log) but answered to the EXTERNAL caller with a
+    | generic error — the failure detail never appears in the HTTP response.
+    |
+    | Example:
+    |
+    | 'webhook' => [
+    |     'enabled' => true,
+    |     'triggers' => [
+    |         'order-webhook' => ['flow' => 'fulfill-order', 'secret' => env('ORDER_WEBHOOK_SECRET'), 'mapper' => \App\Flow\OrderWebhookMapper::class],
+    |     ],
+    | ],
+    |
+    */
+
+    'webhook' => [
+        'enabled' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_ENABLED', false),
+        'route_prefix' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_ROUTE_PREFIX', 'laravel-flow-connect/webhook'),
+        'replay_window_seconds' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_REPLAY_WINDOW_SECONDS', 300),
+        'triggers' => [],
+    ],
+
 ];
