@@ -14,7 +14,7 @@ final class ServiceProviderTest extends TestCase
         return [LaravelFlowConnectServiceProvider::class];
     }
 
-    public function testProviderIsLoaded(): void
+    public function test_provider_is_loaded(): void
     {
         $this->assertTrue($this->app->providerIsLoaded(LaravelFlowConnectServiceProvider::class));
     }
