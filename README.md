@@ -31,7 +31,7 @@ Once `padosoft/laravel-flow` has a tagged v2 release, a plain install will work:
 composer require padosoft/laravel-flow-connect
 ```
 
-**Until then**, `padosoft/laravel-flow: dev-main` is not resolvable by a fresh host app on its own (see the warning above) — the host app's OWN `composer.json` needs a repository entry pointing at a local checkout or the GitHub repo directly, e.g.:
+**Until then**, `padosoft/laravel-flow: dev-main` is not resolvable by a fresh host app on its own (see the warning above) — a Composer stability flag on a DIRECT root requirement does NOT propagate to that package's own transitive dependencies, so simply requiring `padosoft/laravel-flow-connect:dev-main` is not enough by itself. The host app's OWN `composer.json` needs BOTH a repository entry for the core package AND a stability setting that covers it:
 
 ```json
 {
@@ -41,13 +41,15 @@ composer require padosoft/laravel-flow-connect
             "url": "https://github.com/padosoft/laravel-flow"
         }
     ],
+    "minimum-stability": "dev",
+    "prefer-stable": true,
     "require": {
         "padosoft/laravel-flow-connect": "dev-main"
     }
 }
 ```
 
-then `composer require padosoft/laravel-flow-connect:dev-main` — the explicit `dev-main` stability flag on the requirement itself is enough (Composer allows an explicit dev-stability constraint on a specific package regardless of the root project's `minimum-stability`; no `--prefer-stable`/`--stability` CLI flag is needed). Setting `"minimum-stability": "dev"` in the host app's `composer.json` is an equivalent alternative if you'd rather not pin the `:dev-main` suffix on every require.
+`"minimum-stability": "dev"` + `"prefer-stable": true` (the same pair this repo's own `composer.json` uses) is the reliable option — it covers `padosoft/laravel-flow`'s transitive `dev-main` requirement without needing to also list that package explicitly in the host app's own `require`.
 
 ## Development setup
 
