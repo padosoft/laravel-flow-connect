@@ -47,7 +47,7 @@ composer require padosoft/laravel-flow-connect
 }
 ```
 
-then `composer require padosoft/laravel-flow-connect:dev-main --prefer-stable=false` (or set `"minimum-stability": "dev"` in the host app, matching this repo's own `composer.json`).
+then `composer require padosoft/laravel-flow-connect:dev-main` — the explicit `dev-main` stability flag on the requirement itself is enough (Composer allows an explicit dev-stability constraint on a specific package regardless of the root project's `minimum-stability`; no `--prefer-stable`/`--stability` CLI flag is needed). Setting `"minimum-stability": "dev"` in the host app's `composer.json` is an equivalent alternative if you'd rather not pin the `:dev-main` suffix on every require.
 
 ## Development setup
 
