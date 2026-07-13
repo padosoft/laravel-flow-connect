@@ -11,6 +11,7 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
+use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
 use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
@@ -39,11 +40,8 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 
         $this->app->singleton(WebhookTrigger::class);
         $this->app->singleton(WebhookRequestVerifier::class, fn (Container $app): WebhookRequestVerifier => new WebhookRequestVerifier($app->make(CacheRepository::class)));
-        $this->app->singleton(WebhookTriggerRegistrar::class, fn (Container $app): WebhookTriggerRegistrar => new WebhookTriggerRegistrar(
-            $app->make(WebhookTrigger::class),
-            $app->make(WebhookRequestVerifier::class),
-            $app,
-        ));
+        $this->app->singleton(WebhookRequestController::class);
+        $this->app->singleton(WebhookTriggerRegistrar::class);
     }
 
     public function boot(): void

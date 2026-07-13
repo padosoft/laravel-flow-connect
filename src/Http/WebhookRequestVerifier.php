@@ -50,7 +50,7 @@ final class WebhookRequestVerifier
     ): array {
         $signature = $this->verifySignature($signatureHeader, $body, $secret);
         $this->verifyReplayWindow($signature['timestamp'], $replayWindowSeconds);
-        $this->verifyNotReplayed($nonceCacheKeyPrefix, $signature['raw'], $replayWindowSeconds);
+        $this->verifyNotReplayed($nonceCacheKeyPrefix, $signature['raw'], $signature['timestamp'], $replayWindowSeconds);
 
         return $this->decodePayload($body);
     }
@@ -86,7 +86,7 @@ final class WebhookRequestVerifier
         }
     }
 
-    private function verifyNotReplayed(string $keyPrefix, string $signatureHeader, int $replayWindowSeconds): void
+    private function verifyNotReplayed(string $keyPrefix, string $signatureHeader, int $timestamp, int $replayWindowSeconds): void
     {
         // The signature header already binds timestamp+body+secret, so it is
         // itself a valid nonce: a genuine replay of the SAME request carries
@@ -95,7 +95,18 @@ final class WebhookRequestVerifier
         // request cannot both pass this check via a read-then-write race.
         $key = $keyPrefix.':'.hash('sha256', $signatureHeader);
 
-        if (! $this->cache->add($key, true, $replayWindowSeconds)) {
+        // TTL is measured from the SIGNED timestamp's own validity window
+        // end ($timestamp + $replayWindowSeconds), NOT from "now": a
+        // future-skewed timestamp (accepted by verifyReplayWindow() up to
+        // $replayWindowSeconds ahead) would otherwise have its nonce expire
+        // at "now + window" — earlier than the timestamp's OWN window end —
+        // leaving a gap where a replay could slip through after the nonce
+        // expired but before the timestamp itself would be rejected as
+        // stale. max(1, ...) guards against a non-positive TTL for a
+        // timestamp already at/past the edge of its window.
+        $ttl = max(1, ($timestamp + $replayWindowSeconds) - time());
+
+        if (! $this->cache->add($key, true, $ttl)) {
             throw new WebhookVerificationException('replayed request', 401);
         }
     }

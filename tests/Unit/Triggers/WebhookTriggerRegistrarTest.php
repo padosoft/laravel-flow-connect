@@ -11,6 +11,7 @@ use Illuminate\Testing\TestResponse;
 use Orchestra\Testbench\TestCase;
 use Padosoft\LaravelFlow\FlowEngine;
 use Padosoft\LaravelFlow\LaravelFlowServiceProvider;
+use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\LaravelFlowConnectServiceProvider;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\AbstractWebhookMapper;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\NotAWebhookMapper;
@@ -140,6 +141,25 @@ final class WebhookTriggerRegistrarTest extends TestCase
         ]);
 
         $this->assertCount(0, $router->getRoutes());
+    }
+
+    public function test_the_registered_route_action_is_not_a_closure(): void
+    {
+        // Laravel's route:cache cannot serialize a Closure action — the
+        // registrar must bind a controller CLASS, with the per-slug config
+        // threaded through as route defaults, so a host application that
+        // caches its routes doesn't silently lose every webhook route.
+        $registrar = $this->app->make(WebhookTriggerRegistrar::class);
+        $router = new Router($this->app['events'], $this->app);
+        $registrar->register($router, [
+            'enabled' => true,
+            'triggers' => ['order-webhook' => ['flow' => 'fulfill-order', 'secret' => self::SECRET]],
+        ]);
+
+        $route = $router->getRoutes()->getRoutes()[0];
+
+        $this->assertFalse($route->getAction('uses') instanceof \Closure);
+        $this->assertSame(WebhookRequestController::class, $route->getController()::class);
     }
 
     public function test_tampered_signature_is_rejected_401(): void

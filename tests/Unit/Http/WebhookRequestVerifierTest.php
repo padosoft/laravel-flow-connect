@@ -140,6 +140,42 @@ final class WebhookRequestVerifierTest extends TestCase
         }
     }
 
+    public function test_nonce_ttl_covers_the_signed_timestamps_own_replay_window_not_just_from_now(): void
+    {
+        // A future-skewed timestamp (accepted up to $window seconds ahead)
+        // must keep its nonce alive until the timestamp's OWN validity
+        // window ends ($timestamp + $window), not merely $window seconds
+        // from acceptance time — otherwise the nonce could expire before a
+        // replay arriving near the tail of the timestamp's valid window,
+        // reopening exactly the gap this check exists to close.
+        $window = 100;
+        $timestamp = time() + 90; // near the future edge of a 100s window
+        $body = json_encode(['a' => 1]);
+        $header = $this->signatureHeader($body, $timestamp);
+
+        $cache = new class(new ArrayStore) extends Repository
+        {
+            /** @var list<int> */
+            public array $capturedTtls = [];
+
+            public function add($key, $value, $ttl = null)
+            {
+                if (is_int($ttl)) {
+                    $this->capturedTtls[] = $ttl;
+                }
+
+                return parent::add($key, $value, $ttl);
+            }
+        };
+
+        (new WebhookRequestVerifier($cache))->verify($header, $body, self::SECRET, $window, 'test');
+
+        $this->assertCount(1, $cache->capturedTtls);
+        // Expected TTL ~= ($timestamp + $window) - now() ~= 190s, NOT the
+        // naive $window (100s) the pre-fix implementation used.
+        $this->assertGreaterThan($window, $cache->capturedTtls[0]);
+    }
+
     public function test_two_different_nonce_prefixes_do_not_cross_contaminate_replay_state(): void
     {
         // Two different webhook slugs sharing the same secret must not let a
