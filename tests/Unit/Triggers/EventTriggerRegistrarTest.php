@@ -89,7 +89,8 @@ final class EventTriggerRegistrarTest extends TestCase
         $dispatcher->dispatch(new OrderPlaced(1));
 
         Log::shouldHaveReceived('warning')
-            ->withArgs(fn (string $message): bool => str_contains($message, 'mapping/fire failed'))
+            ->withArgs(fn (string $message, array $context): bool => str_contains($message, 'mapping/fire failed')
+                && $context['message'] === 'mapping failed on purpose')
             ->once();
     }
 

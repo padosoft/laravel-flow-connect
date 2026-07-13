@@ -85,11 +85,18 @@ final class EventTriggerRegistrar
 
                     $this->trigger->fire($flow, $input);
                 } catch (Throwable $e) {
+                    // Unlike a persisted infrastructure exception (a
+                    // QueryException can embed SQL + bound params), this
+                    // Throwable is HOST-CONTROLLED user code (the configured
+                    // mapper, or a flow's own input validation) — its
+                    // message IS the "logged reason" this trigger type's
+                    // gate criterion requires, not a secret to withhold.
                     Log::warning('laravel-flow-connect: event trigger mapping/fire failed.', [
                         'event' => $eventClass,
                         'flow' => $flow,
                         'config_index' => $index,
                         'exception' => $e::class,
+                        'message' => $e->getMessage(),
                         'code' => $e->getCode(),
                     ]);
                 }
