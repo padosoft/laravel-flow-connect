@@ -7,7 +7,9 @@ namespace Padosoft\LaravelFlowConnect\Triggers;
 use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 use Padosoft\LaravelFlowConnect\Contracts\EventInputMapper;
+use ReflectionClass;
 use Throwable;
 
 /**
@@ -70,15 +72,35 @@ final class EventTriggerRegistrar
                 continue;
             }
 
-            if ($mapperClass !== null && (! is_string($mapperClass) || trim($mapperClass) === '' || ! is_a($mapperClass, EventInputMapper::class, true))) {
-                $this->skip($index, sprintf('the "mapper" value must be a class-string implementing %s', EventInputMapper::class));
+            if ($mapperClass !== null && ! $this->isInstantiableMapper($mapperClass)) {
+                $this->skip($index, sprintf('the "mapper" value must be an instantiable class implementing %s', EventInputMapper::class));
 
                 continue;
             }
 
             /** @var class-string<EventInputMapper>|null $mapperClass */
-            $events->listen($eventClass, function (object $event) use ($eventClass, $flow, $mapperClass, $index): void {
+            // Variadic, untyped params — NOT `function (object $event)` —
+            // deliberately: Laravel's Dispatcher invokes a listener with
+            // array_values($payload) when an event is fired via the string-
+            // name-plus-payload form (Event::dispatch($eventClass, $payload)),
+            // not necessarily a single typed object. A strictly-typed object
+            // param would let PHP raise a TypeError/ArgumentCountError BEFORE
+            // this closure's body ever runs — outside the try/catch below,
+            // breaking the very isolation guarantee this class exists for.
+            // Validating shape INSIDE the try converts every misshapen
+            // dispatch into a caught, logged skip instead of an escaping
+            // fatal.
+            $events->listen($eventClass, function (mixed ...$payload) use ($eventClass, $flow, $mapperClass, $index): void {
                 try {
+                    $event = $payload[0] ?? null;
+
+                    if (! is_object($event)) {
+                        throw new InvalidArgumentException(sprintf(
+                            'expected the dispatched event to be an object, got %s',
+                            get_debug_type($event),
+                        ));
+                    }
+
                     $input = $mapperClass !== null
                         ? $this->container->make($mapperClass)->map($event)
                         : [];
@@ -102,6 +124,27 @@ final class EventTriggerRegistrar
                 }
             });
         }
+    }
+
+    /**
+     * `is_a($class, Interface::class, true)` alone accepts an INTERFACE or
+     * ABSTRACT class name too (anything that "is a" the target type, not
+     * only concrete implementations) — those pass this eager boot-time
+     * check but fail every time the container tries to actually instantiate
+     * one at fire time, degrading a single config mistake into a warning
+     * logged on every matching event instead of one skip logged once.
+     */
+    private function isInstantiableMapper(mixed $mapperClass): bool
+    {
+        if (! is_string($mapperClass) || trim($mapperClass) === '' || ! class_exists($mapperClass)) {
+            return false;
+        }
+
+        if (! is_a($mapperClass, EventInputMapper::class, true)) {
+            return false;
+        }
+
+        return (new ReflectionClass($mapperClass))->isInstantiable();
     }
 
     private function skip(int|string $index, string $reason): void

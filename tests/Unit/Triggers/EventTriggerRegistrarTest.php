@@ -12,6 +12,7 @@ use Padosoft\LaravelFlow\FlowEngine;
 use Padosoft\LaravelFlow\LaravelFlowServiceProvider;
 use Padosoft\LaravelFlowConnect\LaravelFlowConnectServiceProvider;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Events\OrderPlaced;
+use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\AbstractMapper;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\NotAMapper;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\OrderPlacedMapper;
 use Padosoft\LaravelFlowConnect\Tests\Fixtures\Mappers\ThrowingMapper;
@@ -192,6 +193,54 @@ final class EventTriggerRegistrarTest extends TestCase
 
         Log::shouldHaveReceived('warning')
             ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
+    public function test_a_non_instantiable_mapper_is_skipped_and_logged(): void
+    {
+        // Implements EventInputMapper but is ABSTRACT: is_a() alone would
+        // accept it, yet the container can never build one — this must be
+        // caught at registration, not degrade into a per-event runtime
+        // warning.
+        Log::spy();
+
+        $registrar = $this->app->make(EventTriggerRegistrar::class);
+        $dispatcher = new EventDispatcher($this->app);
+        $registrar->register($dispatcher, [
+            ['event' => OrderPlaced::class, 'flow' => 'fulfill-order', 'mapper' => AbstractMapper::class],
+        ]);
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
+    public function test_a_string_name_plus_payload_dispatch_is_caught_not_fatal(): void
+    {
+        // Laravel's Dispatcher invokes a listener with array_values($payload)
+        // when an event fires via the legacy string-name-plus-payload form
+        // (Event::dispatch($name, $payload)), not necessarily a single typed
+        // object — this must degrade to a caught, logged skip, never an
+        // uncaught TypeError/ArgumentCountError escaping into the host's own
+        // dispatch() call.
+        Log::spy();
+
+        $this->mock(FlowEngine::class, function ($mock): void {
+            $mock->shouldNotReceive('dispatch');
+        });
+
+        $registrar = $this->app->make(EventTriggerRegistrar::class);
+        $dispatcher = new EventDispatcher($this->app);
+        $registrar->register($dispatcher, [
+            ['event' => OrderPlaced::class, 'flow' => 'fulfill-order'],
+        ]);
+
+        // Fires the listener with a non-object payload — the exact shape a
+        // string-name-plus-array-payload dispatch produces.
+        $dispatcher->dispatch(OrderPlaced::class, [42]);
+
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'mapping/fire failed'))
             ->once();
     }
 
