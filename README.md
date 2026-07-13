@@ -9,6 +9,8 @@
 
 🚧 **Under active development** — this package is part of the **Laravel Flow 2.0 program** and is not yet stable. APIs will change without notice until the first tagged minor release. Follow [padosoft/laravel-flow](https://github.com/padosoft/laravel-flow) for the core engine and roadmap.
 
+⚠️ **Not yet installable via a plain `composer require` in a host application.** This package requires `padosoft/laravel-flow`, which has no tagged release yet. Composer only reads the `repositories` block from the ROOT package of an install — this repo's own `composer.json` path-repository entry (see [Development setup](#development-setup)) is honored when working ON this package, but is silently ignored by any application that installs `laravel-flow-connect` AS a dependency. Until core tags its first v2 release, a host app that wants to try this package must add the SAME path (or a VCS) repository for `padosoft/laravel-flow` to its OWN `composer.json` — see [Installation](#installation) below for the exact block.
+
 ## What it will provide
 
 - **HTTP/API node** — call REST endpoints as typed graph nodes (pluggable auth, retry/backoff, response→port mapping).
@@ -23,9 +25,29 @@
 
 ## Installation
 
+Once `padosoft/laravel-flow` has a tagged v2 release, a plain install will work:
+
 ```bash
 composer require padosoft/laravel-flow-connect
 ```
+
+**Until then**, `padosoft/laravel-flow: dev-main` is not resolvable by a fresh host app on its own (see the warning above) — the host app's OWN `composer.json` needs a repository entry pointing at a local checkout or the GitHub repo directly, e.g.:
+
+```json
+{
+    "repositories": [
+        {
+            "type": "vcs",
+            "url": "https://github.com/padosoft/laravel-flow"
+        }
+    ],
+    "require": {
+        "padosoft/laravel-flow-connect": "dev-main"
+    }
+}
+```
+
+then `composer require padosoft/laravel-flow-connect:dev-main --prefer-stable=false` (or set `"minimum-stability": "dev"` in the host app, matching this repo's own `composer.json`).
 
 ## Development setup
 
