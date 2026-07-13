@@ -10,14 +10,13 @@ use PHPUnit\Framework\TestCase;
 use ReflectionClass;
 
 /**
- * The FlowTrigger contract lives in CORE (`Padosoft\LaravelFlow\Contracts\
- * FlowTrigger`) so it is a stable, SemVer-covered surface any trigger
- * source can depend on — this package does NOT redefine it. This test
- * only asserts the interface is resolvable from core and that a concrete
- * connect trigger (D-PR3 ScheduleTrigger, D-PR4 EventTrigger, D-PR5
- * WebhookTrigger) can implement it; the actual signature is pinned by
- * core's own `tests/Contract/PublicApiContractTest.php`, not duplicated
- * here.
+ * The FlowTrigger contract lives in CORE, `Padosoft\LaravelFlow\Contracts\FlowTrigger`,
+ * so it is a stable, SemVer-covered surface any trigger source can depend
+ * on — this package does NOT redefine it. This test only asserts the
+ * interface is resolvable from core and that a concrete connect trigger
+ * (D-PR3 ScheduleTrigger, D-PR4 EventTrigger, D-PR5 WebhookTrigger) can
+ * implement it; the actual signature is pinned by core's own
+ * `tests/Contract/PublicApiContractTest.php`, not duplicated here.
  */
 final class FlowTriggerContractTest extends TestCase
 {

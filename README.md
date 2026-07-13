@@ -61,7 +61,7 @@ Ai/
 └── padosoft-laravel-flow/      (core — note: directory name differs from the package name)
 ```
 
-This is a development-time convenience. Two stages of retargeting are expected before this stabilizes:
+This is a development-time convenience. Three stages of retargeting are expected before this stabilizes:
 
 1. **Now → Macro D gate**: `composer.json` tracks core's `task/v2d-realtime-triggers` MACRO branch (`"padosoft/laravel-flow": "dev-task/v2d-realtime-triggers"`), not `main` — the trigger contract this package's D-PR3/D-PR4/D-PR5 implement against lives there until the Macro D gate merges it to core's `main`. CI mirrors this by checking out that exact ref (see `.github/workflows/ci.yml`).
 2. **Macro D gate → core's first v2 tag**: retarget both `composer.json` and CI back to `main`/`dev-main`.
