@@ -19,12 +19,25 @@
 
 - PHP `^8.3`
 - Laravel `^13.0`
+- `padosoft/laravel-flow` (the core engine this package plugs into)
 
 ## Installation
 
 ```bash
 composer require padosoft/laravel-flow-connect
 ```
+
+## Development setup
+
+`padosoft/laravel-flow` has no tagged v2 release yet, so this package's `composer.json` resolves it via a local **path repository** pointing at `../padosoft-laravel-flow` — a sibling checkout of the core repo, one directory up from this one. Clone both repos side by side:
+
+```
+Ai/
+├── laravel-flow-connect/       (this repo)
+└── padosoft-laravel-flow/      (core — note: directory name differs from the package name)
+```
+
+This is a development-time convenience only. Once `padosoft/laravel-flow` cuts its first v2 tag, the path repository entry and the `"*"` version constraint in `composer.json` will be replaced with a real version constraint (e.g. `^2.0`) against the tagged Packagist release. CI mirrors this layout by checking out both repositories as true siblings (see `.github/workflows/ci.yml`).
 
 ## License
 
