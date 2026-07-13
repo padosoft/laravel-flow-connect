@@ -6,13 +6,12 @@ namespace Padosoft\LaravelFlowConnect\Triggers;
 
 use Padosoft\LaravelFlow\Contracts\FlowTrigger;
 use Padosoft\LaravelFlow\Facades\Flow;
-use Padosoft\LaravelFlow\FlowEngine;
 use Padosoft\LaravelFlow\FlowExecutionOptions;
 
 /**
  * Cron-driven {@see FlowTrigger}: `fire()` hands its (already-mapped, static
- * per-entry) input straight to {@see FlowEngine::dispatch()}
- * via the `Flow` facade. Registration (reading `config('laravel-flow-connect.
+ * per-entry) input straight to the engine's `dispatch()` method via the
+ * `Flow` facade. Registration (reading `config('laravel-flow-connect.
  * schedule_triggers')`, validating each entry, and wiring it onto Laravel's
  * `Schedule`) is {@see ScheduleTriggerRegistrar}'s job, not this class's —
  * this class is the single fire-and-forget seam every registered cron entry
