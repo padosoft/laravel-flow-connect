@@ -54,7 +54,13 @@ final class WebhookTriggerConfig
             return null;
         }
 
-        if (! is_string($secret) || $secret === '') {
+        // trim(), not a bare '' check: a whitespace-only secret (" ") passes
+        // an exact-'' comparison but is an effectively empty, low-entropy
+        // credential — reject it the same way $flow's check already does.
+        // The ORIGINAL untrimmed $secret is still what gets used for HMAC
+        // (below) — this only rejects the all-whitespace case, it never
+        // silently strips real whitespace from a legitimate secret.
+        if (! is_string($secret) || trim($secret) === '') {
             return null;
         }
 

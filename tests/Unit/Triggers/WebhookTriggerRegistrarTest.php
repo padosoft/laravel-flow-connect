@@ -380,6 +380,23 @@ final class WebhookTriggerRegistrarTest extends TestCase
             ->once();
     }
 
+    public function test_a_whitespace_only_secret_is_skipped_and_logged(): void
+    {
+        // "   " passes a bare `$secret === ''` check but is an effectively
+        // empty, low-entropy credential — must be rejected the same way a
+        // genuinely empty secret is.
+        Log::spy();
+
+        $registrar = $this->app->make(WebhookTriggerRegistrar::class);
+        $router = new Router($this->app['events'], $this->app);
+        $registrar->register($router, ['enabled' => true, 'triggers' => ['slug' => ['flow' => 'x', 'secret' => '   ']]]);
+
+        $this->assertCount(0, $router->getRoutes());
+        Log::shouldHaveReceived('warning')
+            ->withArgs(fn (string $message): bool => str_contains($message, 'config entry skipped'))
+            ->once();
+    }
+
     public function test_a_mapper_not_implementing_the_interface_is_skipped_and_logged(): void
     {
         Log::spy();

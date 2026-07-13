@@ -54,23 +54,30 @@ final class WebhookRequestController
 
     public function __invoke(Request $request): JsonResponse
     {
-        $slug = $this->stringParameter($request->route(), 'slug');
-        $entry = $this->resolveEntry($slug);
-
-        if ($entry === null) {
-            // Defensive only (see class docblock): a route only ever exists
-            // for a slug the registrar already validated at boot.
-            Log::warning('laravel-flow-connect: webhook route matched a slug with no valid current config entry.', ['slug' => $slug]);
-
-            return response()->json(['error' => 'not found'], 404);
-        }
-
-        ['flow' => $flow, 'secret' => $secret, 'mapperClass' => $mapperClass] = $entry;
-        $replayWindowSeconds = WebhookTriggerConfig::replayWindowSeconds(
-            $this->config->get('laravel-flow-connect.webhook.replay_window_seconds'),
-        );
+        // $slug/$flow are read outside try/catch's scope but ASSIGNED inside
+        // it — declared here so the catch block's log context can reference
+        // whatever was resolved before a failure, without risking an
+        // "undefined variable" if the failure happens before $flow is set.
+        $slug = '';
+        $flow = null;
 
         try {
+            $slug = $this->stringParameter($request->route(), 'slug');
+            $entry = $this->resolveEntry($slug);
+
+            if ($entry === null) {
+                // Defensive only (see class docblock): a route only ever
+                // exists for a slug the registrar already validated at boot.
+                Log::warning('laravel-flow-connect: webhook route matched a slug with no valid current config entry.', ['slug' => $slug]);
+
+                return response()->json(['error' => 'not found'], 404);
+            }
+
+            ['flow' => $flow, 'secret' => $secret, 'mapperClass' => $mapperClass] = $entry;
+            $replayWindowSeconds = WebhookTriggerConfig::replayWindowSeconds(
+                $this->config->get('laravel-flow-connect.webhook.replay_window_seconds'),
+            );
+
             // header() can return array|string|null if the client sent the
             // header more than once — a repeated signature header is itself
             // a malformed request, so it correctly falls through to the
