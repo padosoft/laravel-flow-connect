@@ -7,7 +7,10 @@ namespace Padosoft\LaravelFlowConnect;
 use Illuminate\Console\Scheduling\Schedule;
 use Illuminate\Contracts\Config\Repository as ConfigRepository;
 use Illuminate\Contracts\Container\Container;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Support\ServiceProvider;
+use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
+use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTriggerRegistrar;
 
@@ -25,11 +28,25 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 
         $this->app->singleton(ScheduleTrigger::class);
         $this->app->singleton(ScheduleTriggerRegistrar::class, fn (Container $app): ScheduleTriggerRegistrar => new ScheduleTriggerRegistrar($app->make(ScheduleTrigger::class)));
+
+        $this->app->singleton(EventTrigger::class);
+        $this->app->singleton(EventTriggerRegistrar::class, fn (Container $app): EventTriggerRegistrar => new EventTriggerRegistrar($app->make(EventTrigger::class), $app));
     }
 
     public function boot(): void
     {
-        // Publishing only matters for console/CLI execution.
+        // Event-trigger registration fires on EVERY request/job, not just
+        // console — unlike the schedule registration below, it must NOT be
+        // gated on runningInConsole(). Dispatcher::listen() only stores a
+        // closure keyed by event class; it forces no heavy resolution the
+        // way Schedule::class does (see below), so there is nothing to defer
+        // and no cost to registering it unconditionally in every process.
+        /** @var array<array-key, mixed> $entries */
+        $entries = (array) $this->app->make(ConfigRepository::class)->get('laravel-flow-connect.event_triggers', []);
+        $this->app->make(EventTriggerRegistrar::class)->register($this->app->make(Dispatcher::class), $entries);
+
+        // Publishing and schedule registration only matter for console/CLI
+        // execution.
         if (! $this->app->runningInConsole()) {
             return;
         }
