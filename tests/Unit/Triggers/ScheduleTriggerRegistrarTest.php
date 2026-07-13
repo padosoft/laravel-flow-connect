@@ -35,6 +35,20 @@ final class ScheduleTriggerRegistrarTest extends TestCase
         $this->assertSame('0 6 * * *', $events[0]->getExpression());
     }
 
+    public function test_schedule_is_not_resolved_until_something_asks_for_it(): void
+    {
+        // afterResolving(), not an eager make() in boot(): the package must
+        // never force Schedule::class construction on its own — that would
+        // make it pay for building the HOST APPLICATION's whole schedule on
+        // every console command (migrate, queue:work, tinker, ...), not just
+        // schedule:run/schedule:list.
+        $this->assertFalse($this->app->resolved(Schedule::class), 'boot() must not have eagerly resolved Schedule::class');
+
+        $this->app->make(Schedule::class);
+
+        $this->assertTrue($this->app->resolved(Schedule::class));
+    }
+
     public function test_the_registered_callback_fires_the_flow_with_the_configured_input(): void
     {
         $this->mock(FlowEngine::class, function ($mock): void {

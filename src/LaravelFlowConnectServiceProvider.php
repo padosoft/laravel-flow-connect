@@ -29,11 +29,7 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        // Publishing and schedule registration only matter for console/CLI
-        // execution (artisan vendor:publish, schedule:run, schedule:list) —
-        // guard both so an ordinary HTTP request's boot doesn't pay for
-        // resolving Schedule::class (which lazily builds the whole
-        // ConsoleKernel) or registering callbacks nothing will ever run.
+        // Publishing only matters for console/CLI execution.
         if (! $this->app->runningInConsole()) {
             return;
         }
@@ -42,16 +38,23 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
             __DIR__.'/../config/laravel-flow-connect.php' => $this->app->configPath('laravel-flow-connect.php'),
         ], 'laravel-flow-connect-config');
 
-        // Schedule::class is a container singleton lazily built by
-        // ConsoleKernel::resolveConsoleSchedule() (see Laravel's
-        // FoundationServiceProvider) — safe to resolve directly here rather
-        // than deferring, since resolving it is exactly what triggers that
-        // lazy construction.
-        $schedule = $this->app->make(Schedule::class);
-        $config = $this->app->make(ConfigRepository::class);
-        /** @var array<int, mixed> $entries */
-        $entries = (array) $config->get('laravel-flow-connect.schedule_triggers', []);
+        // afterResolving(), NOT app->make(): resolving Schedule::class
+        // eagerly here would force it on EVERY console command this package
+        // ships alongside (migrate, queue:work, tinker, ...), not just
+        // schedule:run/schedule:list — and resolving it immediately triggers
+        // ConsoleKernel::resolveConsoleSchedule(), which builds the HOST
+        // APPLICATION's entire schedule (every cron entry it defines, not
+        // just ours). afterResolving() instead registers a callback that
+        // fires ONLY if/when something else in this process actually
+        // resolves Schedule::class (which in practice means the scheduler
+        // commands, and command REALLY does need it) — so an unrelated
+        // artisan command run alongside this package never pays that cost.
+        $this->app->afterResolving(Schedule::class, function (Schedule $schedule): void {
+            $config = $this->app->make(ConfigRepository::class);
+            /** @var array<int, mixed> $entries */
+            $entries = (array) $config->get('laravel-flow-connect.schedule_triggers', []);
 
-        $this->app->make(ScheduleTriggerRegistrar::class)->register($schedule, $entries);
+            $this->app->make(ScheduleTriggerRegistrar::class)->register($schedule, $entries);
+        });
     }
 }
