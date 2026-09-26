@@ -186,9 +186,9 @@ new GraphNode('charge', 'connect.http.request', [
 
 **Security model**
 
-- **No secret in the graph.** Only the connection name travels in the graph; failure messages carry the connection name and status, never a URL, header or response body.
+- **No connection credential in the graph.** The connection's auth token/password and its static headers stay in config; only the connection *name* travels in the graph. Failure messages carry the connection name and status, never a URL, header or response body. This covers the connection's own credentials only: `query`, `headers` and `body` are ordinary node inputs and are stored with the graph and run data like any other input, so never put a credential in them — use the connection's `auth` or static `headers` instead.
 - **Egress guard.** A request goes out only if its host *equals* the connection's host **and** is on `allowed_hosts` (exact, or `*.example.com`). Unless a connection sets `allow_private_network`, hosts resolving to loopback, private, link-local (cloud metadata), CGNAT or reserved addresses — IPv4-mapped IPv6 included — are refused. Redirects are never followed. The approved address is pinned for the request (`CURLOPT_RESOLVE`), best effort against DNS rebinding.
-- **`path` cannot leave the connection**: absolute URLs, `//host`, backslashes, whitespace and `..` are refused. A node input cannot override `Authorization`, `Host`, `Cookie` or `Content-Length`, nor inject a header.
+- **`path` cannot leave the connection**: absolute URLs, `//host`, backslashes, whitespace and `..` are refused — as written and after percent-decoding (`%2e%2e`, `%252e%252e`, `%2f`, `%5c`). A node input cannot override `Authorization`, `Host`, `Cookie` or `Content-Length`, nor inject a header.
 - **Taint analysis.** `connection`, `method` and `path` are declared `requiresTrusted`, so core refuses to *publish* a graph that feeds them from an untrusted source (a model completion, a fetched page). The response is `Untrusted`.
 - **Bounded.** Responses are streamed and capped at `max_response_bytes`.
 - **No implicit retries**: a non-idempotent call must not retry by itself. Opt in per node with core's `config['retry']`; with `idempotency_header` set, every attempt of one node carries the same key. A dry run sends nothing.
@@ -261,7 +261,7 @@ final class MqttTrigger implements FlowTrigger
 
 ## Stability
 
-From v1.0.0 the package follows [Semantic Versioning](https://semver.org/). The SemVer-covered surface is the **config schema** (`config/laravel-flow-connect.php`), the **webhook wire format** (route shape, signature header, status codes), the **node types and their port keys** (`connect.http.request`, `connect.transform`, `connect.condition`, `connect.delay`, `connect.batch`), and the `@api` classes: the mapper contracts `Contracts\EventInputMapper` and `Contracts\WebhookInputMapper`, the node classes and the `Exceptions\*` types. Classes marked `@internal` (the trigger, registrar, controller and verifier classes, and `Http\Client\*`) may change in any release.
+From v1.0.0 the package follows [Semantic Versioning](https://semver.org/). The SemVer-covered surface is the **config schema** (`config/laravel-flow-connect.php`), the **webhook wire format** (route shape, signature header, status codes), the **node types and their port keys** (`connect.http.request`, `connect.transform`, `connect.condition`, `connect.delay`, `connect.batch`), and the `@api` classes: the mapper contracts `Contracts\EventInputMapper` and `Contracts\WebhookInputMapper`, the node classes, and the node exceptions `Exceptions\HttpNodeException`, `InvalidHttpConnectionException`, `EgressDeniedException`, `HttpRequestFailedException` and `MappingException`. Classes marked `@internal` may change in any release: the trigger, registrar, controller and verifier classes, `Exceptions\WebhookVerificationException` and `Http\Client\*`.
 
 ## Development
 

@@ -17,7 +17,7 @@ Graph nodes for [`padosoft/laravel-flow`](https://github.com/padosoft/laravel-fl
 - **`connect.condition`** — evaluates `rules` (`eq neq gt gte lt lte in not_in contains starts_with ends_with exists not_exists empty not_empty`, `match` all/any) and takes one branch through core's `NodeResult::branch()`; the other branch is skipped, not run. No regex operator by design.
 - **`connect.delay`** — waits `seconds` or `until` an ISO-8601 time using core's engine-resumed timers: a queued run pauses on a persisted timer with no worker sleeping; a synchronous run sleeps inline only up to core's cap. `delay.max_seconds` bounds the wait (default 30 days).
 - **`connect.batch`** — splits a list into fixed-size batches (`batch.max_size`, default 1000).
-- New `Exceptions\HttpNodeException` family and `Exceptions\MappingException` (`@api`); `Nodes\*` classes are `@api`.
+- New `@api` exceptions: `HttpNodeException` (base), `InvalidHttpConnectionException`, `EgressDeniedException`, `HttpRequestFailedException` and `MappingException`; the `Nodes\*` classes are `@api`. `WebhookVerificationException` stays `@internal`.
 
 ### Changed
 
