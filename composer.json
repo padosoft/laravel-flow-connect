@@ -1,9 +1,17 @@
 {
     "name": "padosoft/laravel-flow-connect",
-    "description": "Connector nodes and triggers for padosoft/laravel-flow: HTTP/API nodes, schedule and event triggers, signed inbound webhooks. Part of the Laravel Flow 2.0 suite.",
+    "description": "Declarative triggers for padosoft/laravel-flow: cron schedules, Laravel events and HMAC-signed inbound webhooks start flow runs from config. Part of the Laravel Flow 2.0 suite.",
     "type": "library",
     "license": "Apache-2.0",
-    "keywords": ["laravel", "workflow", "orchestration", "triggers", "webhooks", "connectors", "laravel-flow"],
+    "keywords": [
+        "laravel",
+        "workflow",
+        "orchestration",
+        "triggers",
+        "webhooks",
+        "connectors",
+        "laravel-flow"
+    ],
     "authors": [
         {
             "name": "Lorenzo Padovani",
@@ -19,7 +27,7 @@
         "illuminate/http": "^13.0",
         "illuminate/routing": "^13.0",
         "illuminate/support": "^13.0",
-        "padosoft/laravel-flow": "dev-task/v2d-realtime-triggers"
+        "padosoft/laravel-flow": "^2.0"
     },
     "require-dev": {
         "laravel/pint": "^1.18",
@@ -27,15 +35,6 @@
         "phpstan/phpstan": "^2.0",
         "phpunit/phpunit": "^11.5|^12.5"
     },
-    "repositories": [
-        {
-            "type": "path",
-            "url": "../padosoft-laravel-flow",
-            "options": {
-                "symlink": false
-            }
-        }
-    ],
     "autoload": {
         "psr-4": {
             "Padosoft\\LaravelFlowConnect\\": "src/"
@@ -53,8 +52,6 @@
             ]
         }
     },
-    "minimum-stability": "dev",
-    "prefer-stable": true,
     "config": {
         "sort-packages": true
     },

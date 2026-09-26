@@ -1,91 +1,169 @@
 # Laravel Flow Connect
 
-> Connector nodes and triggers for [padosoft/laravel-flow](https://github.com/padosoft/laravel-flow) — the Laravel-native workflow orchestrator for the agentic era.
+> Declarative triggers for [padosoft/laravel-flow](https://github.com/padosoft/laravel-flow): start a flow run from a cron schedule, a Laravel event, or a signed inbound webhook, with no glue code.
 
 [![Latest Version on Packagist](https://img.shields.io/packagist/v/padosoft/laravel-flow-connect.svg?style=flat-square)](https://packagist.org/packages/padosoft/laravel-flow-connect)
+[![CI](https://img.shields.io/github/actions/workflow/status/padosoft/laravel-flow-connect/ci.yml?branch=main&style=flat-square&label=CI)](https://github.com/padosoft/laravel-flow-connect/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg?style=flat-square)](LICENSE)
 
-## Status
+Part of the **Laravel Flow 2.0** suite, alongside [`padosoft/laravel-flow`](https://github.com/padosoft/laravel-flow) (the engine), [`padosoft/laravel-flow-ai`](https://github.com/padosoft/laravel-flow-ai) (the AI pack) and [`padosoft/laravel-flow-admin`](https://github.com/padosoft/laravel-flow-admin) (the operator console).
 
-🚧 **Under active development** — this package is part of the **Laravel Flow 2.0 program** and is not yet stable. APIs will change without notice until the first tagged minor release. Follow [padosoft/laravel-flow](https://github.com/padosoft/laravel-flow) for the core engine and roadmap.
+## Why
 
-⚠️ **Not yet installable via a plain `composer require` in a host application.** This package requires `padosoft/laravel-flow`, which has no tagged release yet — and, until the Laravel Flow 2.0 program's Macro D gate closes, tracks core's `task/v2d-realtime-triggers` macro branch rather than `main` (that branch is where core's trigger contract, `Padosoft\LaravelFlow\Contracts\FlowTrigger`, currently lives; it merges to core's `main` at the Macro D gate). Composer only reads the `repositories` block from the ROOT package of an install — this repo's own `composer.json` path-repository entry (see [Development setup](#development-setup)) is honored when working ON this package, but is silently ignored by any application that installs `laravel-flow-connect` AS a dependency. A host app that wants to try this package pre-tag must add the SAME repository entry for `padosoft/laravel-flow` to its OWN `composer.json` — see [Installation](#installation) below for the exact block.
+A workflow engine is only half the job. Something still has to *start* the runs: a cron tick, a domain event, a call from a partner system. Wiring that by hand means one scheduled closure, one listener and one signed controller per flow, each with its own error handling. It also means one more place where a bad config entry can take down the whole app on boot.
 
-## What it will provide
+`laravel-flow-connect` replaces that glue with **one config file**:
 
-- **HTTP/API node** — call REST endpoints as typed graph nodes (pluggable auth, retry/backoff, response→port mapping).
-- **Utility nodes** — transform, condition, delay/timer, batch.
-- **Triggers** — start flows from cron schedules, Laravel events, and signed inbound webhooks (HMAC, timestamp window), mirroring laravel-flow's signed outbox scheme.
+| Trigger | Starts a run when… | Input comes from |
+|---|---|---|
+| `ScheduleTrigger` | a cron expression matches (Laravel's own scheduler) | the static `input` array in config |
+| `EventTrigger` | a host Laravel event is dispatched | an optional `EventInputMapper`, or `[]` |
+| `WebhookTrigger` | a signed `POST` arrives on its route | an optional `WebhookInputMapper`, or the JSON body verbatim |
 
-## Schedule trigger
+All three implement core's shared `Padosoft\LaravelFlow\Contracts\FlowTrigger` (`@api`) contract and start the run through `Flow::dispatch()`. A third-party trigger source can implement the same contract.
 
-Start a flow run on a cron schedule via `config/laravel-flow-connect.php`:
-
-```php
-return [
-    'schedule_triggers' => [
-        ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'input' => ['range' => 'yesterday']],
-    ],
-];
-```
-
-Publish the config to customize it in a host application:
-
-```bash
-php artisan vendor:publish --tag=laravel-flow-connect-config
-```
-
-Each entry registers on Laravel's own scheduler (`php artisan schedule:run`, same as any other scheduled task) and fires `ScheduleTrigger`, which hands the entry's static `input` straight to `Flow::dispatch($flow, $input)` — no runtime input mapping beyond what's declared in config (unlike `EventTrigger`, a cron tick carries no data of its own to map from). An entry with a malformed `flow`/`cron` value is skipped (not registered) and logged as a warning at boot, rather than failing the whole application boot or the rest of the schedule; a `fire()` failure at run time (e.g. the target flow's own input validation rejects the configured input) is caught and logged the same way, never aborting the scheduler's run of the other registered events.
+**Failure isolation is the design rule.** A malformed config entry is *skipped and logged* at boot, never fatal. An event listener never lets an exception escape into the host's own `event()` call stack. A webhook never answers with an unhandled 500 or leaks internal error detail to the external caller.
 
 ## Requirements
 
 - PHP `^8.3`
 - Laravel `^13.0`
-- `padosoft/laravel-flow` (the core engine this package plugs into)
+- [`padosoft/laravel-flow`](https://github.com/padosoft/laravel-flow) `^2.0`
 
 ## Installation
 
-Once `padosoft/laravel-flow` has a tagged v2 release, a plain install will work:
-
 ```bash
 composer require padosoft/laravel-flow-connect
+php artisan vendor:publish --tag=laravel-flow-connect-config
 ```
 
-**Until then**, `padosoft/laravel-flow: dev-task/v2d-realtime-triggers` is not resolvable by a fresh host app on its own (see the warning above) — a Composer stability flag on a DIRECT root requirement does NOT propagate to that package's own transitive dependencies, so simply requiring `padosoft/laravel-flow-connect:dev-main` is not enough by itself. The host app's OWN `composer.json` needs BOTH a repository entry for the core package's macro branch AND a stability setting that covers it:
+The service provider is auto-discovered. With the default (empty) config the package registers nothing, so every trigger is opt-in.
 
-```json
+## Schedule trigger
+
+```php
+// config/laravel-flow-connect.php
+'schedule_triggers' => [
+    ['flow' => 'daily-report', 'cron' => '0 6 * * *', 'input' => ['range' => 'yesterday']],
+    ['flow' => 'eu-digest',    'cron' => '30 7 * * 1-5', 'timezone' => 'Europe/Rome'],
+],
+```
+
+Each entry is registered on Laravel's own scheduler, so it runs under the usual `php artisan schedule:run` and shows up in `schedule:list`. It hands the static `input` straight to `Flow::dispatch($flow, $input)`. `timezone` is an optional IANA identifier and defaults to `config('app.timezone')`.
+
+- A malformed entry is **skipped and logged** at boot. This covers a non-array entry, an empty `flow`, an invalid `cron`, a non-array `input` or an unknown timezone.
+- A `fire()` failure at run time (for example, the flow's own input validation rejects the configured input) is caught and logged. It never aborts the scheduler's run of the other events.
+- The scheduler is resolved lazily (`afterResolving`), so shipping this package does not force the host's schedule to build on every Artisan command.
+
+## Event trigger
+
+```php
+'event_triggers' => [
+    ['event' => \App\Events\OrderPlaced::class, 'flow' => 'fulfill-order', 'mapper' => \App\Flow\OrderPlacedMapper::class],
+],
+```
+
+```php
+use Padosoft\LaravelFlowConnect\Contracts\EventInputMapper;
+
+final class OrderPlacedMapper implements EventInputMapper
 {
-    "repositories": [
-        {
-            "type": "vcs",
-            "url": "https://github.com/padosoft/laravel-flow"
-        }
-    ],
-    "minimum-stability": "dev",
-    "prefer-stable": true,
-    "require": {
-        "padosoft/laravel-flow-connect": "dev-main"
+    public function map(object $event): array
+    {
+        return ['order_id' => $event->order->id, 'total' => $event->order->total];
     }
 }
 ```
 
-`"minimum-stability": "dev"` + `"prefer-stable": true` (the same pair this repo's own `composer.json` uses) is the reliable option — it covers `padosoft/laravel-flow`'s transitive dev-branch requirement without needing to also list that package explicitly in the host app's own `require`.
+The mapper is container-resolved on every firing, so constructor injection works. Omit `mapper` to fire the flow with an empty input.
 
-## Development setup
+- If a mapper **cannot** build valid input, it should throw. The occurrence is then logged (with the exception message) and **no run is created**, so a run never starts from partial input.
+- The listener validates the dispatch shape itself and swallows every failure. The host's `event(new OrderPlaced(...))` call never sees an exception from this package.
+- An entry whose `event` class does not exist, or whose `mapper` is missing, not an `EventInputMapper`, or not instantiable (an interface or abstract class), is skipped and logged at boot.
 
-`padosoft/laravel-flow` has no tagged v2 release yet, so this package's `composer.json` resolves it via a local **path repository** pointing at `../padosoft-laravel-flow` — a sibling checkout of the core repo, one directory up from this one. Clone both repos side by side:
+## Inbound webhook trigger
+
+Webhooks are **disabled by default**. Enable them and declare one entry per endpoint:
+
+```php
+'webhook' => [
+    'enabled' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_ENABLED', false),
+    'route_prefix' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_ROUTE_PREFIX', 'laravel-flow-connect/webhook'),
+    'replay_window_seconds' => env('LARAVEL_FLOW_CONNECT_WEBHOOK_REPLAY_WINDOW_SECONDS', 300),
+    'triggers' => [
+        'order-webhook' => [
+            'flow' => 'fulfill-order',
+            'secret' => env('ORDER_WEBHOOK_SECRET'),
+            'mapper' => \App\Flow\OrderWebhookMapper::class, // optional
+        ],
+    ],
+],
+```
+
+This registers `POST /laravel-flow-connect/webhook/order-webhook`. Callers sign each request with the **same scheme core uses for its outbound webhooks** (`WebhookDeliveryClient`), so one laravel-flow app can trigger another out of the box:
 
 ```
-Ai/
-├── laravel-flow-connect/       (this repo)
-└── padosoft-laravel-flow/      (core — note: directory name differs from the package name)
+X-Laravel-Flow-Signature: t={unix timestamp},v1={hex HMAC-SHA256 of "{timestamp}.{raw body}" keyed by secret}
 ```
 
-This is a development-time convenience. Three stages of retargeting are expected before this stabilizes:
+```bash
+TS=$(date +%s); BODY='{"order_id":42}'
+SIG=$(printf '%s.%s' "$TS" "$BODY" | openssl dgst -sha256 -hmac "$ORDER_WEBHOOK_SECRET" -hex | sed 's/^.* //')
+curl -X POST https://app.test/laravel-flow-connect/webhook/order-webhook \
+  -H "Content-Type: application/json" -H "X-Laravel-Flow-Signature: t=$TS,v1=$SIG" -d "$BODY"
+```
 
-1. **Now → Macro D gate**: `composer.json` tracks core's `task/v2d-realtime-triggers` MACRO branch (`"padosoft/laravel-flow": "dev-task/v2d-realtime-triggers"`), not `main` — the trigger contract this package's D-PR3/D-PR4/D-PR5 implement against lives there until the Macro D gate merges it to core's `main`. CI mirrors this by checking out that exact ref (see `.github/workflows/ci.yml`). **Locally**, the path repository mirrors whatever branch the sibling `../padosoft-laravel-flow` checkout currently has checked out — `git -C ../padosoft-laravel-flow checkout task/v2d-realtime-triggers` (and `git pull`) before running `composer update` here, or the install will fail (or silently mirror the wrong ref) while the constraint targets that branch.
-2. **Macro D gate → core's first v2 tag**: retarget both `composer.json` and CI back to `main`/`dev-main`.
-3. **After core's first v2 tag**: the path repository entry and the `dev-main` constraint are replaced with a real version constraint (e.g. `^2.0`) against the tagged Packagist release.
+| Response | When |
+|---|---|
+| `202 {"status":"accepted"}` | signature valid, run dispatched |
+| `401` | missing/malformed/invalid signature, timestamp outside the window, or a replay |
+| `404` | no valid trigger entry for that slug |
+| `422` | body is not a JSON object/array |
+| `500 {"error":"internal error"}` | the mapper or `fire()` threw. Full detail goes to *your* log, never to the caller |
+
+**Security properties**
+
+- Signatures are compared in constant time. The timestamp must fall within `±replay_window_seconds`.
+- **Replay protection**: each signature is consumed once via an atomic `Cache::add()`. It stays consumed until the end of its own signed timestamp window, so a future-skewed timestamp cannot slip through early. In a multi-server deployment, use a **shared** cache store (Redis, database, and so on).
+- Secrets are **not** stored in route definitions, so `php artisan route:cache` never serialises them. The controller reads them from config per request.
+- Slugs are validated (`[A-Za-z0-9_-]`), and an empty or whitespace-only secret disables the entry.
+
+## Writing your own trigger source
+
+Implement core's contract and call it from wherever your signal arrives (a queue consumer, an IMAP poller, an MQTT client…):
+
+```php
+use Padosoft\LaravelFlow\Contracts\FlowTrigger;
+use Padosoft\LaravelFlow\Facades\Flow;
+use Padosoft\LaravelFlow\FlowExecutionOptions;
+
+final class MqttTrigger implements FlowTrigger
+{
+    public function fire(string $flowName, array $input = [], ?FlowExecutionOptions $options = null): void
+    {
+        Flow::dispatch($flowName, $input, $options);
+    }
+}
+```
+
+## Stability
+
+From v1.0.0 the package follows [Semantic Versioning](https://semver.org/). The SemVer-covered surface is the **config schema** (`config/laravel-flow-connect.php`), the **webhook wire format** (route shape, signature header, status codes) and the `@api` mapper contracts `Contracts\EventInputMapper` and `Contracts\WebhookInputMapper`. Classes marked `@internal` (the trigger, registrar, controller and verifier classes) may change in any release.
+
+## Roadmap
+
+The Flow 2.0 design also places a generic **HTTP/API node** and **utility nodes** (transform, condition, delay, batch) in this package. They are not part of v1.0 and will ship in a later minor release.
+
+## Development
+
+```bash
+git clone https://github.com/padosoft/laravel-flow-connect
+cd laravel-flow-connect
+composer install
+composer quality   # Pint + PHPStan (level 8) + PHPUnit Unit & Contract suites
+```
+
+Core is resolved from Packagist like any other dependency, so no sibling checkout is needed. On Windows, keep LF line endings (enforced by `.gitattributes`), because Pint checks them.
 
 ## License
 
