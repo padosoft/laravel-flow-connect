@@ -16,6 +16,7 @@ use Padosoft\LaravelFlowConnect\Http\Client\HttpConnectionRegistry;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
 use Padosoft\LaravelFlowConnect\Nodes\ConditionNode;
+use Padosoft\LaravelFlowConnect\Nodes\DelayNode;
 use Padosoft\LaravelFlowConnect\Nodes\HttpRequestNode;
 use Padosoft\LaravelFlowConnect\Nodes\TransformNode;
 use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
@@ -39,6 +40,7 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         HttpRequestNode::class,
         TransformNode::class,
         ConditionNode::class,
+        DelayNode::class,
     ];
 
     public function register(): void

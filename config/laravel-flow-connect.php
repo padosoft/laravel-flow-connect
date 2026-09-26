@@ -147,4 +147,23 @@ return [
         'connections' => [],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Delay node (`connect.delay`)
+    |--------------------------------------------------------------------------
+    |
+    | `max_seconds` is the longest a delay may wait (default 30 days), so a typo
+    | cannot park a run for years. The node needs core's `resume_at` migration,
+    | QUEUED runs (a synchronous run only sleeps up to core's
+    | `laravel-flow.executor.max_inline_delay_seconds`), and this scheduled every
+    | minute as the safety net for a lost job or a queue driver that cannot delay:
+    |
+    |     Schedule::command('flow:resume-due-timers')->everyMinute()->withoutOverlapping();
+    |
+    */
+
+    'delay' => [
+        'max_seconds' => 2_592_000,
+    ],
+
 ];
