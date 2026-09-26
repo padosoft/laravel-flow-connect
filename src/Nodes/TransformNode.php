@@ -64,7 +64,13 @@ final class TransformNode implements FlowNodeHandler
             $result = [];
 
             foreach ($mapping as $key => $spec) {
-                $result[(string) $key] = $this->evaluate((string) $key, $spec, $data);
+                try {
+                    $result[(string) $key] = $this->evaluate((string) $key, $spec, $data);
+                } catch (\JsonException) {
+                    // A value that cannot be JSON-encoded (invalid UTF-8, INF, a
+                    // recursive structure) is a mapping problem, reported by key.
+                    throw new MappingException(sprintf('Mapping [%s] produced a value that cannot be JSON-encoded.', (string) $key));
+                }
             }
         } catch (MappingException $e) {
             return NodeResult::failed($e);
@@ -75,6 +81,7 @@ final class TransformNode implements FlowNodeHandler
 
     /**
      * @throws MappingException
+     * @throws \JsonException
      */
     private function evaluate(string $key, mixed $spec, mixed $data): mixed
     {
@@ -115,6 +122,7 @@ final class TransformNode implements FlowNodeHandler
      * @param  array<array-key, mixed>  $spec
      *
      * @throws MappingException
+     * @throws \JsonException
      */
     private function pathSpec(string $key, array $spec, mixed $data): mixed
     {
@@ -141,9 +149,16 @@ final class TransformNode implements FlowNodeHandler
 
     /**
      * @throws MappingException
+     * @throws \JsonException
      */
     private function template(string $key, string $template, mixed $data): string
     {
+        // Every `{{` must close: an unterminated placeholder would otherwise be
+        // left in the output verbatim and silently corrupt it.
+        if (substr_count($template, '{{') !== preg_match_all('/\{\{\s*.*?\s*\}\}/s', $template)) {
+            throw new MappingException(sprintf('Mapping [%s] has an unterminated `{{` placeholder.', $key));
+        }
+
         return (string) preg_replace_callback('/\{\{\s*(.*?)\s*\}\}/s', function (array $match) use ($key, $data): string {
             if (! PathResolver::isPath($match[1])) {
                 throw new MappingException(sprintf('Mapping [%s] has a template placeholder that is not a path.', $key));
@@ -162,6 +177,7 @@ final class TransformNode implements FlowNodeHandler
 
     /**
      * @throws MappingException
+     * @throws \JsonException
      */
     private function cast(string $key, mixed $value, mixed $cast): mixed
     {
@@ -191,7 +207,15 @@ final class TransformNode implements FlowNodeHandler
             throw new MappingException(sprintf('Mapping [%s] could not cast its value to %s.', $key, $cast));
         }
 
-        return $cast === 'int' ? (int) $value : (float) $value;
+        $number = $cast === 'int' ? (int) $value : (float) $value;
+
+        // "1e999" is numeric to PHP but overflows to INF, which cannot be stored
+        // or JSON-encoded downstream: refuse it here, by key.
+        if (is_float($number) && ! is_finite($number)) {
+            throw new MappingException(sprintf('Mapping [%s] could not cast its value to a finite %s.', $key, $cast));
+        }
+
+        return $number;
     }
 
     /**
