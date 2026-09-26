@@ -15,6 +15,7 @@ use Padosoft\LaravelFlowConnect\Http\Client\EgressGuard;
 use Padosoft\LaravelFlowConnect\Http\Client\HttpConnectionRegistry;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
+use Padosoft\LaravelFlowConnect\Nodes\BatchNode;
 use Padosoft\LaravelFlowConnect\Nodes\ConditionNode;
 use Padosoft\LaravelFlowConnect\Nodes\DelayNode;
 use Padosoft\LaravelFlowConnect\Nodes\HttpRequestNode;
@@ -41,6 +42,7 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         TransformNode::class,
         ConditionNode::class,
         DelayNode::class,
+        BatchNode::class,
     ];
 
     public function register(): void

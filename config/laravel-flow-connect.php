@@ -166,4 +166,18 @@ return [
         'max_seconds' => 2_592_000,
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | Batch node (`connect.batch`)
+    |--------------------------------------------------------------------------
+    |
+    | `max_size` caps a batch's size (default 1000), so a bad `size` cannot turn
+    | a list into one giant batch by accident.
+    |
+    */
+
+    'batch' => [
+        'max_size' => 1000,
+    ],
+
 ];
