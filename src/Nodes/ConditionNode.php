@@ -144,7 +144,9 @@ final class ConditionNode implements FlowNodeHandler
             throw new MappingException(sprintf('Rule #%d has an unknown operator [%s].', $position, $rule['op']));
         }
 
-        if (isset($rule['path']) && (! is_string($rule['path']) || ! PathResolver::isPath($rule['path']))) {
+        // Presence-aware: only an OMITTED path defaults to the whole value. An
+        // explicit `"path": null` (or any non-string) is a malformed rule.
+        if (array_key_exists('path', $rule) && (! is_string($rule['path']) || ! PathResolver::isPath($rule['path']))) {
             throw new MappingException(sprintf('Rule #%d has an invalid `path`; use "$" or "$.a.b".', $position));
         }
 
@@ -198,7 +200,7 @@ final class ConditionNode implements FlowNodeHandler
         }
 
         if ($this->numeric($a) && $this->numeric($b)) {
-            return (float) $a === (float) $b;
+            return $this->compareNumbers($a, $b) === 0;
         }
 
         return $a === $b;
@@ -210,7 +212,7 @@ final class ConditionNode implements FlowNodeHandler
     private function compare(mixed $a, mixed $b): ?int
     {
         if ($this->numeric($a) && $this->numeric($b)) {
-            return (float) $a <=> (float) $b;
+            return $this->compareNumbers($a, $b);
         }
 
         if (is_string($a) && is_string($b)) {
@@ -218,6 +220,53 @@ final class ConditionNode implements FlowNodeHandler
         }
 
         return null;
+    }
+
+    /**
+     * Two integers (an int, or a string of digits) are compared EXACTLY as
+     * digit strings: converting both to float collapses distinct 64-bit ids
+     * ("9007199254740992" vs "9007199254740993" are the same float), which would
+     * route a graph down the wrong branch. Anything with a fraction or exponent
+     * falls back to a float comparison.
+     */
+    private function compareNumbers(mixed $a, mixed $b): int
+    {
+        $left = $this->integerString($a);
+        $right = $this->integerString($b);
+
+        if ($left === null || $right === null) {
+            return (float) $a <=> (float) $b;
+        }
+
+        $negativeLeft = str_starts_with($left, '-');
+        $negativeRight = str_starts_with($right, '-');
+
+        if ($negativeLeft !== $negativeRight) {
+            return $negativeLeft ? -1 : 1;
+        }
+
+        $magnitude = strlen(ltrim($left, '-')) <=> strlen(ltrim($right, '-')) ?: strcmp(ltrim($left, '-'), ltrim($right, '-')) <=> 0;
+
+        return $negativeLeft ? -$magnitude : $magnitude;
+    }
+
+    /**
+     * The canonical digit string of an integer value (no sign for zero, no
+     * leading zeros), or null when the value is not an integer.
+     */
+    private function integerString(mixed $value): ?string
+    {
+        if (is_int($value)) {
+            return (string) $value;
+        }
+
+        if (! is_string($value) || preg_match('/^([+-]?)(\d+)$/', $value, $m) !== 1) {
+            return null;
+        }
+
+        $digits = ltrim($m[2], '0');
+
+        return $digits === '' ? '0' : ($m[1] === '-' ? '-' : '').$digits;
     }
 
     private function numeric(mixed $value): bool

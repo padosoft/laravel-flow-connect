@@ -112,12 +112,10 @@ final class DelayNode implements FlowNodeHandler
      */
     private function parse(mixed $until): DateTimeImmutable
     {
-        if (is_string($until)) {
+        if (is_string($until) && $this->wellFormed($until)) {
             foreach (['Y-m-d\TH:i:sP', 'Y-m-d\TH:i:s.uP'] as $format) {
                 $parsed = DateTimeImmutable::createFromFormat($format, $until);
 
-                // createFromFormat is lenient about overflow ("2026-02-31"); insist
-                // the value round-trips so a wrong date cannot silently shift.
                 if ($parsed !== false && DateTimeImmutable::getLastErrors() === false) {
                     return $parsed;
                 }
@@ -125,6 +123,31 @@ final class DelayNode implements FlowNodeHandler
         }
 
         throw new MappingException('`until` must be an ISO-8601 timestamp with an offset, e.g. 2026-10-01T09:00:00+02:00 or 2026-10-01T07:00:00Z.');
+    }
+
+    /**
+     * PHP's parser is lenient: it accepts an offset like `+99:99` and calendar
+     * overflow without reporting errors, and a past time is allowed here, so a
+     * typo could complete the delay immediately. Validate every component
+     * ourselves instead of trusting the parser's warnings.
+     */
+    private function wellFormed(string $until): bool
+    {
+        if (preg_match('/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,6})?(?:Z|[+-](\d{2}):(\d{2}))$/', $until, $m) !== 1) {
+            return false;
+        }
+
+        [$year, $month, $day, $hour, $minute, $second] = array_map('intval', array_slice($m, 1, 6));
+
+        if (! checkdate($month, $day, $year) || $hour > 23 || $minute > 59 || $second > 59) {
+            return false;
+        }
+
+        // A numeric offset must be a real one: hours 00-14, minutes 00-59.
+        $offsetHours = $m[7] ?? '';
+        $offsetMinutes = $m[8] ?? '';
+
+        return $offsetHours === '' || ((int) $offsetHours <= 14 && (int) $offsetMinutes <= 59);
     }
 
     private function maxSeconds(): int
