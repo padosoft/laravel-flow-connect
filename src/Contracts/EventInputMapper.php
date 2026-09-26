@@ -20,7 +20,7 @@ use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
  * skips firing the trigger for that event occurrence — never creating a
  * flow run with malformed input.
  *
- * @internal
+ * @api
  */
 interface EventInputMapper
 {

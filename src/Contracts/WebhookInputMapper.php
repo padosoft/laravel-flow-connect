@@ -25,7 +25,7 @@ use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
  * Omitting a mapper (`mapper` config key left null) fires the flow with the
  * decoded payload verbatim as its input — the payload IS the input.
  *
- * @internal
+ * @api
  */
 interface WebhookInputMapper
 {
