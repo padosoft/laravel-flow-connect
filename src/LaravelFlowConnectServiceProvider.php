@@ -11,8 +11,11 @@ use Illuminate\Contracts\Container\Container;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Routing\Router;
 use Illuminate\Support\ServiceProvider;
+use Padosoft\LaravelFlowConnect\Http\Client\EgressGuard;
+use Padosoft\LaravelFlowConnect\Http\Client\HttpConnectionRegistry;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
+use Padosoft\LaravelFlowConnect\Nodes\HttpRequestNode;
 use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTrigger;
@@ -25,6 +28,15 @@ use Padosoft\LaravelFlowConnect\Triggers\WebhookTriggerRegistrar;
  */
 final class LaravelFlowConnectServiceProvider extends ServiceProvider
 {
+    /**
+     * Graph node handlers this package contributes to core's registry.
+     *
+     * @var list<class-string>
+     */
+    private const NODE_HANDLERS = [
+        HttpRequestNode::class,
+    ];
+
     public function register(): void
     {
         $this->mergeConfigFrom(
@@ -42,10 +54,37 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
         $this->app->singleton(WebhookRequestVerifier::class, fn (Container $app): WebhookRequestVerifier => new WebhookRequestVerifier($app->make(CacheRepository::class)));
         $this->app->singleton(WebhookRequestController::class);
         $this->app->singleton(WebhookTriggerRegistrar::class);
+
+        // Not singletons: both read config at construction, so a fresh instance
+        // per node resolution always sees the current allow-list / connections.
+        $this->app->bind(HttpConnectionRegistry::class, fn (Container $app): HttpConnectionRegistry => new HttpConnectionRegistry($app->make(ConfigRepository::class)));
+        $this->app->bind(EgressGuard::class, function (Container $app): EgressGuard {
+            $hosts = $app->make(ConfigRepository::class)->get('laravel-flow-connect.http.allowed_hosts', []);
+
+            return new EgressGuard(is_array($hosts) ? array_values(array_filter($hosts, 'is_string')) : []);
+        });
+    }
+
+    /**
+     * Core has no dedicated registration API: a package appends to
+     * `laravel-flow.nodes.handlers`. Done in boot(), not register(): core's own
+     * config merge is shallow, so writing `laravel-flow.nodes.*` during
+     * register() could drop `nodes.discovery` if this provider ran first. The
+     * NodeRegistry singleton is resolved lazily, so boot() is early enough.
+     */
+    private function registerNodeHandlers(): void
+    {
+        $config = $this->app->make(ConfigRepository::class);
+        /** @var list<class-string> $existing */
+        $existing = array_values((array) $config->get('laravel-flow.nodes.handlers', []));
+
+        $config->set('laravel-flow.nodes.handlers', array_values(array_unique([...$existing, ...self::NODE_HANDLERS])));
     }
 
     public function boot(): void
     {
+        $this->registerNodeHandlers();
+
         // Event-trigger registration fires on EVERY request/job, not just
         // console — unlike the schedule registration below, it must NOT be
         // gated on runningInConsole(). Dispatcher::listen() only stores a
