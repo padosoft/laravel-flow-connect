@@ -102,6 +102,7 @@ final class DelayNodeTest extends TestCase
             'offset' => ['2026-10-01T14:00:00+02:00', 1_790_856_000],
             'negative offset' => ['2026-10-01T07:00:00-05:00', 1_790_856_000],
             'fractional' => ['2026-10-01T12:00:00.500Z', 1_790_856_000],
+            'max valid offset' => ['2026-10-02T02:00:00+14:00', 1_790_856_000],
         ];
     }
 
@@ -137,6 +138,15 @@ final class DelayNodeTest extends TestCase
             'date only' => [['until' => '2030-01-01'], 'ISO-8601'],
             'free text' => [['until' => 'next tuesday'], 'ISO-8601'],
             'overflowing date' => [['until' => '2030-02-31T00:00:00Z'], 'ISO-8601'],
+            'impossible offset hours' => [['until' => '2026-10-01T10:00:00+99:99'], 'ISO-8601'],
+            'offset beyond +14' => [['until' => '2026-10-01T10:00:00+15:00'], 'ISO-8601'],
+            'impossible offset minutes' => [['until' => '2026-10-01T10:00:00+02:75'], 'ISO-8601'],
+            'hour 24' => [['until' => '2026-10-01T24:00:00Z'], 'ISO-8601'],
+            'minute 60' => [['until' => '2026-10-01T10:60:00Z'], 'ISO-8601'],
+            'second 60' => [['until' => '2026-10-01T10:00:60Z'], 'ISO-8601'],
+            'month 13' => [['until' => '2026-13-01T10:00:00Z'], 'ISO-8601'],
+            'lowercase separators' => [['until' => '2026-10-01t10:00:00z'], 'ISO-8601'],
+            'trailing junk' => [['until' => '2026-10-01T10:00:00Z junk'], 'ISO-8601'],
             'over the limit seconds' => [['seconds' => 10_000], 'exceeds the 3600 second limit'],
             'over the limit until' => [['until' => '2030-01-01T00:00:00Z'], 'more than 3600 seconds away'],
         ];
