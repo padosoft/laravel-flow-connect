@@ -62,7 +62,9 @@ final readonly class HttpConnection
         return new self(
             $name,
             rtrim(trim((string) $baseUrl), '/'),
-            strtolower((string) $parts['host']),
+            // parse_url() keeps the brackets of an IPv6 literal ("[::1]"); the guard
+            // and the DNS pin work on the bare address.
+            strtolower(trim((string) $parts['host'], '[]')),
             $authType,
             $auth,
             self::headers($name, $config['headers'] ?? []),

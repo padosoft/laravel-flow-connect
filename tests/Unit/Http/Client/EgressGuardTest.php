@@ -129,6 +129,23 @@ final class EgressGuardTest extends TestCase
         $this->guard(addresses: [])->assertAllowed($this->connection(), 'https://api.example.test/v1');
     }
 
+    public function test_a_bracketed_ipv6_literal_is_recognised_as_an_address_not_resolved(): void
+    {
+        $guard = new EgressGuard(['2606:4700:4700::1111'], static fn (): array => throw new \LogicException('no DNS lookup expected'));
+        $connection = $this->connection('https://[2606:4700:4700::1111]/v1');
+
+        $this->assertSame('2606:4700:4700::1111', $connection->host);
+        $this->assertSame(['2606:4700:4700::1111'], $guard->assertAllowed($connection, 'https://[2606:4700:4700::1111]/v1/x'));
+    }
+
+    public function test_a_private_ipv6_literal_is_still_denied(): void
+    {
+        $guard = new EgressGuard(['fd00::1'], static fn (): array => throw new \LogicException('no DNS lookup expected'));
+
+        $this->expectException(EgressDeniedException::class);
+        $guard->assertAllowed($this->connection('https://[fd00::1]'), 'https://[fd00::1]/x');
+    }
+
     public function test_an_ip_literal_host_is_judged_without_dns(): void
     {
         $guard = new EgressGuard(['10.0.0.9'], static fn (): array => throw new \LogicException('no DNS lookup expected'));
