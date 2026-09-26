@@ -198,6 +198,13 @@ final class HttpRequestNodeTest extends TestCase
             'backslash' => ['a\\b'],
             'whitespace' => ['a b'],
             'newline' => ["a\r\nHost: evil"],
+            'encoded traversal' => ['%2e%2e/admin'],
+            'encoded traversal upper' => ['%2E%2E/admin'],
+            'encoded slash traversal' => ['..%2fadmin'],
+            'double encoded traversal' => ['%252e%252e/admin'],
+            'encoded backslash' => ['a%5cb'],
+            'encoded scheme' => ['https%3A//evil.test'],
+            'encoded control char' => ['a%0d%0aHost:%20evil'],
         ];
     }
 

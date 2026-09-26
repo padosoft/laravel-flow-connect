@@ -144,16 +144,37 @@ final class HttpRequestNode implements FlowNodeHandler
     private function url(HttpConnection $connection, string $path): string
     {
         // `path` is relative to the connection's base URL. Anything that could
-        // change the host, smuggle a header or climb out of the base is refused.
-        if ($path !== '' && (preg_match('#^[a-z][a-z0-9+.\-]*:#i', $path) === 1
-            || str_starts_with($path, '//')
-            || str_contains($path, '\\')
-            || preg_match('/[\x00-\x20\x7f]/', $path) === 1
-            || in_array('..', explode('/', explode('?', $path, 2)[0]), true))) {
-            throw new HttpRequestFailedException(sprintf('Connection [%s]: `path` must be a plain relative path.', $connection->name));
+        // change the host, smuggle a header or climb out of the base is refused —
+        // judged on the value as written AND on every percent-decoded form of it,
+        // because a server or proxy in front of the API may decode `%2e%2e` (or
+        // `%252e%252e`) before routing and turn it into a `..` the literal check
+        // never saw.
+        $candidate = $path;
+
+        for ($round = 0; $round < 4 && $path !== ''; $round++) {
+            if ($this->unsafePath($candidate)) {
+                throw new HttpRequestFailedException(sprintf('Connection [%s]: `path` must be a plain relative path.', $connection->name));
+            }
+
+            $decoded = rawurldecode($candidate);
+
+            if ($decoded === $candidate) {
+                break;
+            }
+
+            $candidate = $decoded;
         }
 
         return $connection->baseUrl.($path === '' ? '' : '/'.ltrim($path, '/'));
+    }
+
+    private function unsafePath(string $path): bool
+    {
+        return preg_match('#^[a-z][a-z0-9+.\-]*:#i', $path) === 1
+            || str_starts_with($path, '//')
+            || str_contains($path, '\\')
+            || preg_match('/[\x00-\x20\x7f]/', $path) === 1
+            || in_array('..', explode('/', explode('?', $path, 2)[0]), true);
     }
 
     /**
