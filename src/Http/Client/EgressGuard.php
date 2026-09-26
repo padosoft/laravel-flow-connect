@@ -51,7 +51,7 @@ final class EgressGuard
     public function assertAllowed(HttpConnection $connection, string $url): array
     {
         $parts = parse_url($url);
-        $host = is_array($parts) ? strtolower((string) ($parts['host'] ?? '')) : '';
+        $host = is_array($parts) ? strtolower(trim((string) ($parts['host'] ?? ''), '[]')) : '';
         $scheme = is_array($parts) ? strtolower((string) ($parts['scheme'] ?? '')) : '';
 
         if ($host === '' || ! in_array($scheme, ['http', 'https'], true) || isset($parts['user']) || isset($parts['pass'])) {
