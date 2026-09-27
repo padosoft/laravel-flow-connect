@@ -144,7 +144,7 @@ The nodes are registered automatically (the provider appends them to core's `lar
 
 ### `connect.http.request`
 
-Calls an HTTP API through a **named connection**. The graph carries the connection *name*; the base URL, credentials and limits live in `config/laravel-flow-connect.php`, so a stored graph, a run row or a dashboard can never leak a secret.
+Calls an HTTP API through a **named connection**. The graph carries the connection *name*; the base URL, credentials and limits live in `config/laravel-flow-connect.php`, so the connection's own credentials never end up in a stored graph, a run row or a dashboard (see the security model below for exactly what that does and does not cover).
 
 ```php
 // config/laravel-flow-connect.php
@@ -195,7 +195,7 @@ new GraphNode('charge', 'connect.http.request', [
 
 ### `connect.transform`
 
-Reshapes data with `mapping: outputKey => spec`. A spec is a **path** (`"$"`, `"$.customer.email"`, `"$.items.0.sku"`, `"$.items.*.sku"` for a list), a **template** (`"Hello {{ $.name }}"`), a literal, or an object `{path | template | value, default?, cast?}` with `cast` one of `int`, `float`, `string`, `bool`, `json`.
+Reshapes data with `mapping: outputKey => spec`. A spec is a **path** (`"$"`, `"$.customer.email"`, `"$.items.0.sku"`, `"$.items.*.sku"` for a list), a **template** (`"Hello {{ $.name }}"`), a **scalar or `null` literal** (`"text"`, `42`, `true`), or an object `{path | template | value, default?, cast?}` — a list or object literal must be wrapped as `{"value": [...]}`, because a bare array is read as that spec object with `cast` one of `int`, `float`, `string`, `bool`, `json`.
 
 ```php
 new GraphNode('shape', 'connect.transform', ['mapping' => [
