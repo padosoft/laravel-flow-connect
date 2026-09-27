@@ -106,4 +106,45 @@ return [
         'triggers' => [],
     ],
 
+    /*
+    |--------------------------------------------------------------------------
+    | HTTP node (`connect.http.request`)
+    |--------------------------------------------------------------------------
+    |
+    | A graph names a CONNECTION; it never carries a credential. Base URL, auth,
+    | timeouts and limits live here, so a stored graph, a run row or a dashboard
+    | cannot leak a secret. Read the secret from the environment:
+    |
+    | 'connections' => [
+    |     'stripe' => [
+    |         'base_url' => 'https://api.stripe.com/v1',
+    |         'auth' => ['type' => 'bearer', 'token' => env('STRIPE_SECRET')],
+    |         // auth types: none | bearer {token} | basic {username, password}
+    |         //             | header {header, value}
+    |         'headers' => ['Accept' => 'application/json'],   // sent on every request
+    |         'timeout' => 30,                    // seconds
+    |         'connect_timeout' => 5,
+    |         'verify' => true,                   // TLS certificate verification
+    |         'max_response_bytes' => 1048576,    // larger responses fail the node
+    |         'idempotency_header' => 'Idempotency-Key', // optional; one stable key per node
+    |         'allow_private_network' => false,   // true only for an internal service
+    |     ],
+    | ],
+    |
+    | `allowed_hosts` is the egress allow-list: a request goes out only when its
+    | host EQUALS the connection's host AND is listed here (exact, or
+    | `*.example.com` for subdomains). EMPTY MEANS DENY ALL, so the node is inert
+    | until a host opts in. Unless a connection sets `allow_private_network`,
+    | hosts that resolve to loopback, private, link-local (cloud metadata), CGNAT
+    | or reserved addresses are refused, and redirects are never followed.
+    |
+    | A malformed connection fails only the node that uses it, never boot.
+    |
+    */
+
+    'http' => [
+        'allowed_hosts' => [],
+        'connections' => [],
+    ],
+
 ];
