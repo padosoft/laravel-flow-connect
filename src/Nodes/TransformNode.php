@@ -66,6 +66,12 @@ final class TransformNode implements FlowNodeHandler
             foreach ($mapping as $key => $spec) {
                 try {
                     $result[(string) $key] = $this->evaluate((string) $key, $spec, $data);
+
+                    // The output is a JSON port and is persisted as JSON: a value
+                    // that reaches it WITHOUT passing through json_encode (a bare
+                    // path returning invalid UTF-8, a resource, INF) must be
+                    // refused here, by key, not fail later during serialization.
+                    json_encode($result[(string) $key], JSON_THROW_ON_ERROR);
                 } catch (\JsonException) {
                     // A value that cannot be JSON-encoded (invalid UTF-8, INF, a
                     // recursive structure) is a mapping problem, reported by key.
