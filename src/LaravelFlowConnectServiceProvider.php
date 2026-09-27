@@ -15,7 +15,9 @@ use Padosoft\LaravelFlowConnect\Http\Client\EgressGuard;
 use Padosoft\LaravelFlowConnect\Http\Client\HttpConnectionRegistry;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestController;
 use Padosoft\LaravelFlowConnect\Http\WebhookRequestVerifier;
+use Padosoft\LaravelFlowConnect\Nodes\ConditionNode;
 use Padosoft\LaravelFlowConnect\Nodes\HttpRequestNode;
+use Padosoft\LaravelFlowConnect\Nodes\TransformNode;
 use Padosoft\LaravelFlowConnect\Triggers\EventTrigger;
 use Padosoft\LaravelFlowConnect\Triggers\EventTriggerRegistrar;
 use Padosoft\LaravelFlowConnect\Triggers\ScheduleTrigger;
@@ -35,6 +37,8 @@ final class LaravelFlowConnectServiceProvider extends ServiceProvider
      */
     private const NODE_HANDLERS = [
         HttpRequestNode::class,
+        TransformNode::class,
+        ConditionNode::class,
     ];
 
     public function register(): void
