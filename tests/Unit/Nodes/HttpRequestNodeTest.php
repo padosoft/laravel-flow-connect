@@ -205,6 +205,9 @@ final class HttpRequestNodeTest extends TestCase
             'encoded backslash' => ['a%5cb'],
             'encoded scheme' => ['https%3A//evil.test'],
             'encoded control char' => ['a%0d%0aHost:%20evil'],
+            'four times encoded traversal' => ['%2525252e%2525252e/admin'],
+            'five times encoded traversal' => ['%252525252e%252525252e/admin'],
+            'absurdly deep encoding' => [str_repeat('%25', 12).'41'],
         ];
     }
 
@@ -216,6 +219,19 @@ final class HttpRequestNodeTest extends TestCase
         $this->assertFalse($result->success);
         $this->assertInstanceOf(HttpRequestFailedException::class, $result->error);
         $this->http->assertNothingSent();
+    }
+
+    public function test_an_ip_literal_host_is_not_dns_pinned(): void
+    {
+        // A public IPv6 literal must reach the client: a CURLOPT_RESOLVE entry for a
+        // bare colon-laden host is unparseable by libcurl and would fail the request.
+        $this->http->fake(['*' => Factory::response('ok', 200)]);
+        $node = $this->node(['base_url' => 'https://[2606:4700:4700::1111]/v1'], ['2606:4700:4700::1111'], ['2606:4700:4700::1111']);
+
+        $result = $this->execute($node, ['path' => 'x']);
+
+        $this->assertTrue($result->success, (string) $result->error?->getMessage());
+        $this->http->assertSent(static fn (Request $r): bool => $r->url() === 'https://[2606:4700:4700::1111]/v1/x');
     }
 
     public function test_an_unlisted_host_is_denied_and_nothing_is_sent(): void
