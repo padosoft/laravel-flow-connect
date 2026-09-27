@@ -1,6 +1,6 @@
 {
     "name": "padosoft/laravel-flow-connect",
-    "description": "Declarative triggers for padosoft/laravel-flow: cron schedules, Laravel events and HMAC-signed inbound webhooks start flow runs from config. Part of the Laravel Flow 2.0 suite.",
+    "description": "Triggers and nodes for padosoft/laravel-flow: cron, event and signed-webhook triggers, plus HTTP/API, transform, condition, delay and batch graph nodes. Part of the Laravel Flow 2.0 suite.",
     "type": "library",
     "license": "Apache-2.0",
     "keywords": [
@@ -10,7 +10,10 @@
         "triggers",
         "webhooks",
         "connectors",
-        "laravel-flow"
+        "laravel-flow",
+        "nodes",
+        "http",
+        "automation"
     ],
     "authors": [
         {
