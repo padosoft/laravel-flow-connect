@@ -151,6 +151,11 @@ final class TransformNodeTest extends TestCase
             'unterminated placeholder' => [['x' => 'Hello {{ $.customer.name'], 'unterminated'],
             'unterminated among closed ones' => [['x' => '{{ $.a }} and {{ $.b'], 'unterminated'],
             'overflowing float' => [['x' => ['value' => '1e999', 'cast' => 'float']], 'finite float'],
+            'bare path returning invalid utf-8' => [['x' => '$.bad'], 'cannot be JSON-encoded'],
+            'bare path returning a resource' => [['x' => '$.res'], 'cannot be JSON-encoded'],
+            'bare path returning INF' => [['x' => '$.inf'], 'cannot be JSON-encoded'],
+            'float cast of INF' => [['x' => ['path' => '$.inf', 'cast' => 'float']], 'cannot be JSON-encoded'],
+            'scalar template of invalid utf-8' => [['x' => 'v={{ $.bad }}'], 'cannot be JSON-encoded'],
             'invalid utf-8 cannot be json encoded' => [['x' => ['path' => '$.bad', 'cast' => 'json']], 'cannot be JSON-encoded'],
             'invalid utf-8 in a template' => [['x' => 'v={{ $.tree }}'], 'cannot be JSON-encoded'],
         ];
@@ -162,7 +167,7 @@ final class TransformNodeTest extends TestCase
     #[DataProvider('invalidMappings')]
     public function test_an_invalid_mapping_fails_the_node_naming_the_key_not_the_data(array $mapping, string $fragment): void
     {
-        $result = $this->transform(['secret' => 'S3CR3T', 'bad' => "\xB1\x31", 'tree' => ['k' => "\xB1\x31"]], $mapping, $error);
+        $result = $this->transform(['secret' => 'S3CR3T', 'bad' => "\xB1\x31", 'tree' => ['k' => "\xB1\x31"], 'res' => fopen('php://memory', 'r'), 'inf' => INF], $mapping, $error);
 
         $this->assertNull($result);
         $this->assertStringContainsString($fragment, (string) $error);

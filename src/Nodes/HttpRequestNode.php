@@ -151,18 +151,24 @@ final class HttpRequestNode implements FlowNodeHandler
         // never saw.
         $candidate = $path;
 
-        for ($round = 0; $round < 4 && $path !== ''; $round++) {
-            if ($this->unsafePath($candidate)) {
-                throw new HttpRequestFailedException(sprintf('Connection [%s]: `path` must be a plain relative path.', $connection->name));
+        if ($path !== '') {
+            // Decode until the value stops changing, judging EVERY form including
+            // the last one: a fixed number of rounds would leave the final decode
+            // unchecked. A value still changing after the cap is too deeply
+            // encoded to be a legitimate path and is refused outright.
+            for ($round = 0; ; $round++) {
+                if ($round > 8 || $this->unsafePath($candidate)) {
+                    throw new HttpRequestFailedException(sprintf('Connection [%s]: `path` must be a plain relative path.', $connection->name));
+                }
+
+                $decoded = rawurldecode($candidate);
+
+                if ($decoded === $candidate) {
+                    break;
+                }
+
+                $candidate = $decoded;
             }
-
-            $decoded = rawurldecode($candidate);
-
-            if ($decoded === $candidate) {
-                break;
-            }
-
-            $candidate = $decoded;
         }
 
         return $connection->baseUrl.($path === '' ? '' : '/'.ltrim($path, '/'));
@@ -239,7 +245,9 @@ final class HttpRequestNode implements FlowNodeHandler
 
         // Best effort against DNS rebinding: make libcurl connect to the address
         // the guard just approved instead of resolving the name a second time.
-        if (defined('CURLOPT_RESOLVE') && $addresses !== []) {
+        // An IP-literal host involves no DNS, so there is nothing to pin (and a
+        // bare IPv6 host, full of colons, is not a valid CURLOPT_RESOLVE host).
+        if (defined('CURLOPT_RESOLVE') && $addresses !== [] && filter_var($connection->host, FILTER_VALIDATE_IP) === false) {
             $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
             $port = (int) (parse_url($url, PHP_URL_PORT) ?: ($scheme === 'https' ? 443 : 80));
             $ip = str_contains($addresses[0], ':') ? '['.$addresses[0].']' : $addresses[0];
